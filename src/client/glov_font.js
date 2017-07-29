@@ -30,10 +30,12 @@ export const ALIGN = {
   HLEFT: 0,
   HCENTER: 1,
   HRIGHT: 2,
+  HMASK: 3,
 
   VTOP: 0 << 2,
   VCENTER: 1 << 2,
   VBOTTOM: 2 << 2,
+  VMASK: 3 << 2,
 
   HFIT: 1 << 4,
   HWRAP: 1 << 5, // only for glovMarkup*, not drawAligned below, use drawWrapped below instead
@@ -212,7 +214,7 @@ function techParamsGet() {
 }
 
 class GlovFont {
-  constructor(draw_2d, font_info, texture) {
+  constructor(draw_2d, draw_list, font_info, texture) {
     assert(gd_params);
     assert(font_info.font_size!==0); // Got lost somewhere
 
@@ -220,6 +222,7 @@ class GlovFont {
     this.font_info = font_info;
     this.blend_mode = 'alpha';
     this.draw_2d = g_draw_2d = draw_2d;
+    this.draw_list = draw_list;
 
     // build lookup
     this.char_infos = [];
@@ -236,62 +239,66 @@ class GlovFont {
   // General draw functions return width
   // Pass NULL for style to use default style
   // If the function takes a color, this overrides the color on the style
-  drawSizedColor(draw_list, style, x, y, z, x_size, y_size, color, text) {
-    return this.drawSized(draw_list, styleColored(style, color), x, y, z, x_size, y_size, text);
+  drawSizedColor(style, x, y, z, x_size, y_size, color, text) {
+    return this.drawSized(styleColored(style, color), x, y, z, x_size, y_size, text);
   }
-  drawSized(draw_list, style, x, y, z, x_size, y_size, text) {
-    return this.drawScaled(draw_list, style, x, y, z, x_size / this.font_info.font_size, y_size / this.font_info.font_size, text);
+  drawSized(style, x, y, z, x_size, y_size, text) {
+    return this.drawScaled(style, x, y, z, x_size / this.font_info.font_size, y_size / this.font_info.font_size, text);
   }
-  /*
-  drawAlignedSized(draw_list, style, float x, float y, float z, x_size, y_size, FontAlignType align, int w, int h, text){
-    float x, y;
-    float width = getStringWidth(style, x_size, text);
-    if (align & ALIGN_HFIT && width > w)
+
+  drawAlignedSized(style, _x, _y, z, x_size, y_size, align, w, h, text){
+    let width = this.getStringWidth(style, x_size, text);
+    if (align & ALIGN.HFIT && width > w)
     {
-      float scale = w / width;
+      let scale = w / width;
       x_size *= scale;
       width = w;
       // Additionally, if we're really squishing things horizontally, shrink the font size
       // and offset to be centered.
       if (scale < 0.5) {
-        if ((align & ALIGN_VMASK) != ALIGN_VCENTER && (align & ALIGN_VMASK) != ALIGN_VBOTTOM) {
+        if ((align & ALIGN.VMASK) !== ALIGN.VCENTER && (align & ALIGN.VMASK) !== ALIGN.VBOTTOM) {
           // Offset to be roughly centered in the original line bounds
           _y += (y_size - (y_size * scale * 2)) / 2;
         }
         y_size *= scale * 2;
       }
     }
-    float height = y_size;
-    switch (align & ALIGN_HMASK) {
-    case ALIGN_HCENTER:
-      x = _x + (w  - width) / 2.f;
+    let height = y_size;
+    let x, y;
+    switch (align & ALIGN.HMASK) {
+    case ALIGN.HCENTER:
+      x = _x + (w  - width) / 2;
       break;
-    case ALIGN_HRIGHT:
+    case ALIGN.HRIGHT:
       x = _x + w - width;
       break;
-    case ALIGN_HLEFT:
+    case ALIGN.HLEFT:
+      x = _x;
+      break;
     default:
       x = _x;
     }
-    switch(align & ALIGN_VMASK) {
-    case ALIGN_VCENTER:
-      y = _y + (h - height) / 2.f;
+    switch(align & ALIGN.VMASK) {
+    case ALIGN.VCENTER:
+      y = _y + (h - height) / 2;
       break;
-    case ALIGN_VBOTTOM:
+    case ALIGN.VBOTTOM:
       y = _y + h - height;
       break;
-    case ALIGN_VTOP:
+    case ALIGN.VTOP:
+      y = _y;
+      break;
     default:
       y = _y;
     }
 
-    return drawSized(draw_list, style, x, y, z, x_size, y_size, text);
+    return this.drawSized(style, x, y, z, x_size, y_size, text);
   }
 
-
+  /*
   // returns height
-  int drawSizedColorWrapped(draw_list, style, x, y, z, w, indent, x_size, y_size, int color, text) {
-    return drawScaledWrapped(draw_list, glovFontStyleColored(style, color), x, y, z, w, indent, x_size / font_info.font_size, y_size / font_info.font_size, text);
+  drawSizedColorWrapped(style, x, y, z, w, indent, x_size, y_size, color, text) {
+    return drawScaledWrapped(glovFontStyleColored(style, color), x, y, z, w, indent, x_size / font_info.font_size, y_size / font_info.font_size, text);
   }
 
   int wrapLines(w, indent, x_size, text, std::function<void(x, int linenum, const char *word)> word_cb) {
@@ -438,11 +445,11 @@ class GlovFont {
     return linenum;
   }
 
-  float drawScaledWrapped(draw_list, style, x, y, z, w, indent, xsc, ysc, text) {
+  float drawScaledWrapped(style, x, y, z, w, indent, xsc, ysc, text) {
     int num_lines = wrapLinesScaled(w, indent, xsc, text, [this, style, xsc, ysc, _x, _y, z](float xoffs, int linenum, const WCHAR *word) {
       float y = _y + font_info.font_size * ysc * linenum;
       float x = _x + xoffs;
-      drawScaled(draw_list, style, x, y, z, xsc, ysc, word);
+      drawScaled(style, x, y, z, xsc, ysc, word);
     });
     return num_lines * font_info.font_size * ysc;
   }
@@ -464,7 +471,7 @@ class GlovFont {
   //////////////////////////////////////////////////////////////////////////
   // Main implementation
 
-  drawScaled(draw_list, style, _x, y, z, xsc, ysc, text) {
+  drawScaled(style, _x, y, z, xsc, ysc, text) {
     let x = _x;
     let font_info = this.font_info;
     let tex = this.texture.getTexture();
@@ -550,7 +557,7 @@ class GlovFont {
           let w = char_info.w * xsc + padding * 2 * rel_x_scale;
           let h = char_info.h * ysc + padding * 2 * rel_y_scale;
 
-          let elem = draw_list.queuefn(drawFontElem, x - rel_x_scale * padding, y - rel_y_scale * padding, z, this.blend_mode);
+          let elem = this.draw_list.queuefn(drawFontElem, x - rel_x_scale * padding, y - rel_y_scale * padding, z, this.blend_mode);
           elem.tex = tex;
           elem.u0 = u0 * tile_width;
           elem.v0 = v0 * tile_height;
@@ -831,6 +838,6 @@ export function populateDraw2DParams(params) {
   }
 }
 
-export function create(draw_2d, font_info, texture) {
-  return new GlovFont(draw_2d, font_info, texture);
+export function create(draw_2d, draw_list, font_info, texture) {
+  return new GlovFont(draw_2d, draw_list, font_info, texture);
 }
