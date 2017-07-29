@@ -2,14 +2,11 @@ LD39 - Running out of Power
 ============================
 
 Next steps:
-* add resources to level and render
-* drones pick up and carry resources
-* drop off resources
 * economy:
   * show money
   * spend money
   * earn money / advance day
-
+* crafting stations
 
 Level:
   * (Random?) resource distribution

@@ -56,6 +56,8 @@ TurbulenzEngine.onload = function onloadFn()
   let game_height = 960;
   const color_white = mathDevice.v4Build(1, 1, 1, 1);
   const color_has_actor = mathDevice.v4Build(1, 1, 1, 0.1);
+  const color_resource_depleted = mathDevice.v4Build(0.2, 0.2, 0.2, 1);
+  const color_resource_non_full = mathDevice.v4Build(0.7, 0.7, 0.7, 1);
   const color_red = mathDevice.v4Build(1, 0, 0, 1);
   const color_yellow = mathDevice.v4Build(1, 1, 0, 1);
 
@@ -92,6 +94,17 @@ TurbulenzEngine.onload = function onloadFn()
     if (sprites.drone) {
       return;
     }
+    sprites.white = createSprite('white', {
+      width : 1,
+      height : 1,
+      x : 0,
+      y : 0,
+      rotation : 0,
+      color : [1,1,1, 1],
+      origin: [0, 0],
+      textureRectangle : mathDevice.v4Build(0, 0, 1, 1)
+    });
+
     let spriteSize = 13;
     let background_tile = 100;
     function buildRects(w, h) {
@@ -127,6 +140,14 @@ TurbulenzEngine.onload = function onloadFn()
       origin: [0,0],
     });
     sprites.arrow.rects = buildRects(2,2);
+    sprites.resource = createSprite('resources.png', {
+      width : TILE_SIZE,
+      height : TILE_SIZE,
+      rotation : 0,
+      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
+      origin: [0,0],
+    });
+    sprites.resource.rects = buildRects(2,2);
 
     sprites.base = createSprite('base.png', {
       width : TILE_SIZE * BASE_SIZE,
@@ -137,14 +158,72 @@ TurbulenzEngine.onload = function onloadFn()
     });
   }
 
+  const base_slurp_coords = [
+    // dx, dy, destination contents
+    [-1, 0, 0],
+    [0, -1, 0],
+    [1, -1, 1],
+    [2, -1, 2],
+    [3, 0, 2],
+    [3, 1, 3],
+    [3, 2, 4],
+    [2, 3, 4],
+    [1, 3, 5],
+    [0, 3, 6],
+    [-1, 2, 6],
+    [-1, 1, 7],
+  ];
+  const base_contents_coords = [
+    [0, 0],
+    [1, 0],
+    [2, 0],
+    [2, 1],
+    [2, 2],
+    [1, 2],
+    [0, 2],
+    [0, 1],
+  ];
+
   const MAP_W = 20;
   const MAP_H = 14;
   const actor_types = { 'drone': true };
   const nonblocking_types = { 'arrow': true };
+  const ticked_types = { 'resource': true, 'base': true };
   const dx = [0, 1, 0, -1];
   const dy = [-1, 0, 1, 0];
+  const resource_types = [
+    {
+      //type: 'res_a',
+      tile: 0,
+      min: 4,
+      max: 4,
+      quantity: 4,
+    },
+    {
+      //type: 'res_b',
+      tile: 1,
+      min: 3,
+      max: 3,
+      quantity: 3,
+    },
+    {
+      //type: 'res_c',
+      tile: 2,
+      min: 2,
+      max: 2,
+      quantity: 2,
+    },
+    {
+      //type: 'res_d',
+      tile: 3,
+      min: 1,
+      max: 1,
+      quantity: 1,
+    },
+  ];
   class DroneDayState {
     constructor() {
+      let rand = random_seed.create('droneday');
       this.tick_id = 0;
       this.map = new Array(MAP_W);
       this.busy = new Array(MAP_W);
@@ -154,17 +233,50 @@ TurbulenzEngine.onload = function onloadFn()
         this.busy[ii] = new Array(MAP_H);
         this.actor_map[ii] = new Array(MAP_H);
       }
+      // Generate base in middle
       let base_x = Math.round((MAP_W - 3) / 2);
       let base_y = Math.round((MAP_H - 3) / 2);
       for (let ii = 0; ii < BASE_SIZE; ++ii) {
         for (let jj = 0; jj < BASE_SIZE; ++jj) {
           this.map[base_x + ii][base_y + jj] = {
             type: 'base',
-            draw: false,
+            nodraw: true,
           };
         }
       }
-      this.map[base_x][base_y].draw = true;
+      this.map[base_x][base_y].nodraw = false;
+
+      // Generate resources
+      let open_tiles = [];
+      for (let x = 0; x < this.map.length; ++x) {
+        for (let y = 0; y < this.map[x].length; ++y) {
+          if (!this.map[x][y]) {
+            open_tiles.push({x, y});
+          }
+        }
+      }
+      for (let ii = 0; ii < resource_types.length; ++ii) {
+        let rt = resource_types[ii];
+        let count = rt.min + rand(rt.max - rt.min);
+        for (let jj = 0; jj < count; ++jj) {
+          if (!open_tiles.length) {
+            break;
+          }
+          let idx = rand(open_tiles.length);
+          let pos = open_tiles[idx];
+          open_tiles[idx] = open_tiles[open_tiles.length - 1];
+          open_tiles.pop();
+          assert(!this.map[pos.x][pos.y]);
+          this.map[pos.x][pos.y] = {
+            type: 'resource',
+            resource: ii,
+            direction: rt.tile, // just tile index, not really direction
+            quantity: rt.quantity,
+            base_quantity: rt.quantity,
+          };
+        }
+      }
+
       this.resetActors();
     }
 
@@ -178,12 +290,12 @@ TurbulenzEngine.onload = function onloadFn()
         tile = this.map[x][y] = {
           type: tile_type,
           direction: dir,
-          draw: true,
         };
       }
     }
 
     resetActors() {
+      this.tickers = [];
       this.actors = [];
       for (let ii = 0; ii < this.actor_map.length; ++ii) {
         for (let jj = 0; jj < this.actor_map[ii].length; ++jj) {
@@ -194,23 +306,88 @@ TurbulenzEngine.onload = function onloadFn()
 
     initActors() {
       let actors = this.actors = [];
+      let tickers = this.tickers = [];
       for (let x = 0; x < this.map.length; ++x) {
         for (let y = 0; y < this.map[x].length; ++y) {
           let tile = this.map[x][y];
-          if (!tile || !actor_types[tile.type]) {
+          if (!tile) {
             continue;
           }
-          assert(tile.type === 'drone');
-          let actor = {
-            x, y,
-            lastx: x,
-            lasty: y,
-            type: tile.type,
-            direction: tile.direction,
-          };
-          assert(!this.actor_map[x][y]);
-          this.actor_map[x][y] = actor;
-          actors.push(actor);
+          if (actor_types[tile.type]) {
+            assert(tile.type === 'drone');
+            let actor = {
+              x, y,
+              lastx: x,
+              lasty: y,
+              type: tile.type,
+              direction: tile.direction,
+            };
+            assert(!this.actor_map[x][y]);
+            this.actor_map[x][y] = actor;
+            actors.push(actor);
+          } else if (ticked_types[tile.type]) {
+            if (tile.type === 'resource') {
+              tile.quantity = tile.base_quantity;
+              tickers.push({ x, y, tile });
+            } else {
+              if (!tile.nodraw) {
+                // upper left corner of base, crafting, etc
+                tile.contents = null;
+                tickers.push({ x, y, tile });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    getActor(x, y) {
+      if (x < 0 || y < 0 || x >= this.map.length || y >= this.map[0].length) {
+        // out of bounds
+        return null;
+      }
+      return this.actor_map[x][y];
+    }
+
+    tickResource(ticker) {
+      let tile = ticker.tile;
+      if (!tile.quantity) {
+        return;
+      }
+      for (let ii = 0; ii < dx.length; ++ii) {
+        let target_actor = this.getActor(ticker.x + dx[ii], ticker.y + dy[ii]);
+        if (!target_actor) {
+          continue;
+        }
+        if (!target_actor.carrying) {
+          target_actor.carrying = tile.resource;
+          --tile.quantity;
+          if (!tile.quantity) {
+            break;
+          }
+        }
+      }
+    }
+
+    tickBase(ticker) {
+      let tile = ticker.tile;
+
+      // TODO: First, sell off contents
+
+      for (let jj = 0; jj < base_slurp_coords.length; ++jj) {
+        let target_contents = base_slurp_coords[jj][2];
+        if (tile.contents && tile.contents[target_contents]) {
+          // already full
+          continue;
+        }
+        let target_actor = this.getActor(ticker.x + base_slurp_coords[jj][0], ticker.y + base_slurp_coords[jj][1]);
+        if (!target_actor) {
+          continue;
+        }
+        if (target_actor.carrying) {
+          tile.contents = tile.contents || [];
+          tile.contents[target_contents] = target_actor.carrying;
+          target_actor.carrying = null;
         }
       }
     }
@@ -252,6 +429,7 @@ TurbulenzEngine.onload = function onloadFn()
       actor.lastx = actor.x;
       actor.lasty = actor.y;
       actor.last_direction = actor.direction;
+      actor.last_carrying = actor.carrying;
       let x = actor.x + dx[actor.direction];
       let y = actor.y + dy[actor.direction];
       if (x < 0 || y < 0 || x >= this.map.length || y >= this.map[0].length) {
@@ -292,6 +470,17 @@ TurbulenzEngine.onload = function onloadFn()
       actor.thinking = false;
     }
 
+    tickTicker(ticker) {
+      switch(ticker.tile.type) {
+      case 'resource':
+        this.tickResource(ticker);
+        break;
+      case 'base':
+        this.tickBase(ticker);
+        break;
+      }
+    }
+
     tick() {
       ++this.tick_id;
       for (let ii = 0; ii < this.busy.length; ++ii) {
@@ -299,19 +488,27 @@ TurbulenzEngine.onload = function onloadFn()
           this.busy[ii][jj] = 0;
         }
       }
+      // Determine where we want to move to prevent collisions
       for (let ii = 0; ii < this.actors.length; ++ii) {
         this.tickActorEarly(this.actors[ii]);
       }
+      // Do movement, do turning
       for (let ii = 0; ii < this.actors.length; ++ii) {
         this.tickActor(this.actors[ii]);
+      }
+      // Move resources around
+      for (let ii = 0; ii < this.tickers.length; ++ii) {
+        this.tickTicker(this.tickers[ii]);
       }
     }
   }
 
-  const Z_TILES = 1;
-  const Z_BUILD_TILE = 2;
-  const Z_ACTORS = 3;
-  const Z_UI = 10;
+  const Z_TILES = 10;
+  const Z_TILES_RESOURCE = 20;
+  const Z_BUILD_TILE = 30;
+  const Z_ACTORS = 40;
+  const Z_ACTORS_CARRYING = 50;
+  const Z_UI = 100;
   const PREVIEW_SPEED = 1000;
 
   let dd;
@@ -334,6 +531,8 @@ TurbulenzEngine.onload = function onloadFn()
       dd.buyTile(2, 3, 'drone', 2);
 
       dd.buyTile(2, 4, 'arrow', 1);
+
+      dd.buyTile(5, 7, 'drone', 1);
 
 
       dd.buyTile(10, 3, 'drone', 2);
@@ -440,6 +639,15 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     draw_list.queue(sprites.background, -TILE_SIZE * 20, -TILE_SIZE * 20, 1, [1, 1, 1, 1]);
+    // darken out of bounds, if visible
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, -TILE_SIZE * 20, 1.5, [0, 0, 0, 0.5],
+      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, dd.map[0].length * TILE_SIZE, 1.5, [0, 0, 0, 0.5],
+      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, 0, 1.5, [0, 0, 0, 0.5],
+      [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
+    draw_list.queue(sprites.white, dd.map.length * TILE_SIZE, 0, 1.5, [0, 0, 0, 0.5],
+      [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     for (let ii = 0; ii < dd.map.length; ++ii) {
       let x = ii * TILE_SIZE;
       for (let jj = 0; jj < dd.map[ii].length; ++jj) {
@@ -460,16 +668,40 @@ TurbulenzEngine.onload = function onloadFn()
             }
           }
         }
-        if (tile && tile.draw && do_draw) {
+        if (tile && !tile.nodraw && do_draw) {
           let color = color_white;
           if (play_state !== 'build' && actor_types[tile.type]) {
             color = color_has_actor;
           }
+          if (tile.type === 'resource') {
+            if (!tile.quantity) {
+              color = color_resource_depleted;
+            } else if (tile.quantity !== tile.base_quantity) {
+              color = color_resource_non_full;
+            }
+          }
           drawTile(tile.type, tile.direction, ii, jj, Z_TILES, color);
+
+          if (tile.contents) {
+            let mapping = null;
+            if (tile.type === 'base') {
+              mapping = base_contents_coords;
+            }
+            if (mapping) {
+              for (let contents_index = 0; contents_index < tile.contents.length; ++contents_index) {
+                let res = tile.contents[contents_index];
+                if (res || res === 0) {
+                  let coords = mapping[contents_index];
+                  drawTile('resource', res, ii + coords[0], jj + coords[1], Z_TILES_RESOURCE, color_white);
+                }
+              }
+            }
+          }
         }
       }
     }
 
+    // Draw interpolated actors
     let progress = (1 - (tick_countdown / tick_time));
     // [0,0.5,1] -> [0,1,1]
     let blend = easeInOut(
@@ -501,6 +733,15 @@ TurbulenzEngine.onload = function onloadFn()
         y = lasty + (nexty - lasty) * bump_blend;
       }
       drawTile(actor.type, direction, x, y, Z_ACTORS, color_white);
+      // TODO: animate this, needs to not be black
+      // Also, hop the drone up and down a little mid-turn
+      // if (direction !== actor.last_direction) {
+      //   drawTile('arrow', direction, x, y, Z_ACTORS + 0.5, [0, 1, 0, 1]);
+      // }
+      if (actor.carrying) {
+        // TODO: interpolate from source if we got it this frame
+        drawTile('resource', actor.carrying, x, y, Z_ACTORS_CARRYING, color_white);
+      }
     }
   }
 
