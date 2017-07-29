@@ -2,11 +2,12 @@ LD39 - Running out of Power
 ============================
 
 Next steps:
-* economy:
-  * show money
-  * spend money
-  * earn money / advance day
-* crafting stations
+* crafting stations / advanced resources
+* maximum power
+* upgrades
+
+UI:
+* right click or shift click to delete, maybe mousewheel to change direction
 
 Level:
   * (Random?) resource distribution
@@ -26,6 +27,8 @@ Primary limiting resource:
   placement radius?
   creep generators?
   drone max power (effectively useful radius!)
+Polish:
+  * Score for beating, high score list
 
 Resoruces and values:
 A 10

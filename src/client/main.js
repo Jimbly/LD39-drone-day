@@ -1,4 +1,4 @@
-/*jshint browser:true*/
+/*jshint browser:true, noempty:false*/
 
 /*global $: false */
 /*global TurbulenzEngine: true */
@@ -50,6 +50,7 @@ TurbulenzEngine.onload = function onloadFn()
   loadTexture('base.png');
   loadTexture('drone.png');
   loadTexture('resources.png');
+  loadTexture('sell.png');
 
   // Viewport for Draw2D.
   let game_width = 1280;
@@ -80,12 +81,21 @@ TurbulenzEngine.onload = function onloadFn()
     title(dt);
   }
 
-  function title(dt) {
+  function title() {
     //test(dt);
     if (true && 'ready') {
       game_state = playInit;
     }
   }
+
+  const Z_TILES = 10;
+  const Z_TILES_RESOURCE = 20;
+  const Z_BUILD_TILE = 30;
+  const Z_ACTORS = 40;
+  const Z_ACTORS_CARRYING = 50;
+  const Z_UI = 100;
+  const Z_FLOAT = 200;
+
 
   let sprites = {};
   const BASE_SIZE = 3;
@@ -148,6 +158,14 @@ TurbulenzEngine.onload = function onloadFn()
       origin: [0,0],
     });
     sprites.resource.rects = buildRects(2,2);
+    sprites.sell = createSprite('sell.png', {
+      width : TILE_SIZE,
+      height : TILE_SIZE,
+      rotation : 0,
+      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
+      origin: [0,0],
+    });
+    sprites.sell.rects = buildRects(1,1);
 
     sprites.base = createSprite('base.png', {
       width : TILE_SIZE * BASE_SIZE,
@@ -156,6 +174,8 @@ TurbulenzEngine.onload = function onloadFn()
       textureRectangle : mathDevice.v4Build(0, 0, spriteSize * BASE_SIZE, spriteSize * BASE_SIZE),
       origin: [0,0],
     });
+
+    sprites.panel = glov_ui.loadSpriteRect('panel.png', [2, 12, 2], [2, 12, 2]);
   }
 
   const base_slurp_coords = [
@@ -184,6 +204,25 @@ TurbulenzEngine.onload = function onloadFn()
     [0, 1],
   ];
 
+  let panel_font_style = glov_font.style(null, {
+    color: 0x000000ff,
+    outline_width: 1.0,
+    outline_color: 0xBBBBBBff,
+  });
+  let font_style_sale = glov_font.style(null, {
+    color: 0x80FF80ff,
+    outline_width: 1.0,
+    outline_color: 0x000000ff,
+  });
+  let font_style_buy = glov_font.style(null, {
+    color: 0xFF2020ff,
+    outline_width: 1.0,
+    outline_color: 0x000000ff,
+  });
+
+
+  let STARTING_MONEY = 10000;
+
   const MAP_W = 20;
   const MAP_H = 14;
   const actor_types = { 'drone': true };
@@ -193,11 +232,11 @@ TurbulenzEngine.onload = function onloadFn()
   const dy = [-1, 0, 1, 0];
   const resource_types = [
     {
-      //type: 'res_a',
       tile: 0,
       min: 4,
       max: 4,
       quantity: 4,
+      value: 10,
     },
     {
       //type: 'res_b',
@@ -205,6 +244,7 @@ TurbulenzEngine.onload = function onloadFn()
       min: 3,
       max: 3,
       quantity: 3,
+      value: 12,
     },
     {
       //type: 'res_c',
@@ -212,6 +252,7 @@ TurbulenzEngine.onload = function onloadFn()
       min: 2,
       max: 2,
       quantity: 2,
+      value: 15,
     },
     {
       //type: 'res_d',
@@ -219,12 +260,22 @@ TurbulenzEngine.onload = function onloadFn()
       min: 1,
       max: 1,
       quantity: 1,
+      value: 100,
     },
   ];
+  const cost_table = {
+    'drone': [200, 100],
+    'arrow': [20, 10],
+  };
+  function resourceValue(res) {
+    return resource_types[res].value;
+  }
   class DroneDayState {
     constructor() {
       let rand = random_seed.create('droneday');
+      this.turn = 0;
       this.tick_id = 0;
+      this.money = STARTING_MONEY;
       this.map = new Array(MAP_W);
       this.busy = new Array(MAP_W);
       this.actor_map = new Array(MAP_W);
@@ -280,17 +331,57 @@ TurbulenzEngine.onload = function onloadFn()
       this.resetActors();
     }
 
+    advanceEnd() {
+      dd.turn++;
+      dd.money += dd.dmoney;
+    }
+
+    countOf(tile_type) {
+      let r = 0;
+      for (let ii = 0; ii < this.map.length; ++ii) {
+        for (let jj = 0; jj < this.map[ii].length; ++jj) {
+          let tile = this.map[ii][jj];
+          if (tile && tile.type === tile_type) {
+            ++r;
+          }
+        }
+      }
+      return r;
+    }
+
     buyTile(x, y, tile_type, dir) {
       let tile = this.map[x][y];
-      if (tile && tile.type === tile_type) {
-        // just rotate
-        tile.direction = (tile.direction + 1) % 4;
+      let dmoney = 0;
+      if (!tile_type) {
+        // selling
+        if (tile) {
+          let old_type = tile.type;
+          let cost_calc = cost_table[old_type];
+          this.map[x][y] = null;
+          dmoney = cost_calc[0] + cost_calc[1] * this.countOf(old_type);
+        }
       } else {
-        // buy new tile
-        tile = this.map[x][y] = {
-          type: tile_type,
-          direction: dir,
-        };
+        if (tile && tile.type === tile_type) {
+          // just rotate
+          tile.direction = (tile.direction + 1) % 4;
+        } else {
+          let cost_calc = cost_table[tile_type];
+          dmoney = -(cost_calc[0] + cost_calc[1] * this.countOf(tile_type));
+          if (-dmoney > this.money) {
+            floatText(x*TILE_SIZE, y*TILE_SIZE, Z_FLOAT, `Cannot afford ${-dmoney}`, font_style_buy);
+            dmoney = 0;
+          } else {
+            // buy new tile
+            tile = this.map[x][y] = {
+              type: tile_type,
+              direction: dir,
+            };
+          }
+        }
+      }
+      if (dmoney) {
+        floatText(x*TILE_SIZE, y*TILE_SIZE, Z_FLOAT, `${(dmoney < 0) ? '-' : '+'}\$${Math.abs(dmoney)}`, (dmoney > 0) ? font_style_sale : font_style_buy);
+        this.money += dmoney;
       }
     }
 
@@ -302,6 +393,7 @@ TurbulenzEngine.onload = function onloadFn()
           this.actor_map[ii][jj] = null;
         }
       }
+      this.dmoney = 0;
     }
 
     initActors() {
@@ -372,7 +464,18 @@ TurbulenzEngine.onload = function onloadFn()
     tickBase(ticker) {
       let tile = ticker.tile;
 
-      // TODO: First, sell off contents
+      // First, sell off contents
+      if (tile.contents) {
+        for (let ii = 0; ii < tile.contents.length; ++ii) {
+          if (tile.contents[ii] || tile.contents[ii] === 0) {
+            let resource_value = resourceValue(tile.contents[ii]);
+            this.dmoney += resource_value;
+            tile.contents[ii] = null;
+            floatText((ticker.x + base_contents_coords[ii][0]) * TILE_SIZE, (ticker.y + base_contents_coords[ii][1]) * TILE_SIZE,
+              Z_FLOAT, `+\$${resource_value}`, font_style_sale);
+          }
+        }
+      }
 
       for (let jj = 0; jj < base_slurp_coords.length; ++jj) {
         let target_contents = base_slurp_coords[jj][2];
@@ -503,13 +606,8 @@ TurbulenzEngine.onload = function onloadFn()
     }
   }
 
-  const Z_TILES = 10;
-  const Z_TILES_RESOURCE = 20;
-  const Z_BUILD_TILE = 30;
-  const Z_ACTORS = 40;
-  const Z_ACTORS_CARRYING = 50;
-  const Z_UI = 100;
-  const PREVIEW_SPEED = 1000;
+  const ADVANCE_SPEED = 1000;
+  const ADVANCE_SPEED_FAST = 100;
 
   let dd;
   let current_tile;
@@ -517,6 +615,18 @@ TurbulenzEngine.onload = function onloadFn()
   let play_state;
   let tick_time;
   let tick_countdown;
+
+  const FLOATER_TIME = 600;
+  const FLOATER_SIZE = 24;
+  const FLOATER_DIST = 32;
+  let floaters = [];
+  function floatText(x, y, z, text, style) {
+    floaters.push({
+      x, y, z, text, style,
+      t: 0,
+    });
+  }
+
   function playInit(dt) {
     initGraphics();
     $('.screen').hide();
@@ -526,6 +636,7 @@ TurbulenzEngine.onload = function onloadFn()
     current_tile = 'drone';
     current_direction = 2;
     play_state = 'build';
+    floaters = [];
 
     if (DEBUG) {
       dd.buyTile(2, 3, 'drone', 2);
@@ -535,8 +646,8 @@ TurbulenzEngine.onload = function onloadFn()
       dd.buyTile(5, 7, 'drone', 1);
 
 
-      dd.buyTile(10, 3, 'drone', 2);
-      dd.buyTile(10, 4, 'drone', 0);
+      // dd.buyTile(10, 3, 'drone', 2);
+      // dd.buyTile(10, 4, 'drone', 0);
 
       dd.buyTile(5, 2, 'drone', 1);
       dd.buyTile(6, 4, 'drone', 0);
@@ -553,10 +664,11 @@ TurbulenzEngine.onload = function onloadFn()
       dd.buyTile(13, 2, 'arrow', 2);
       dd.buyTile(13, 3, 'arrow', 3);
 
-      dd.buyTile(4, 10, 'drone', 2);
-      dd.buyTile(4, 12, 'drone', 0);
+      // dd.buyTile(4, 10, 'drone', 2);
+      // dd.buyTile(4, 12, 'drone', 0);
 
       previewStart();
+
     }
 
     play(dt);
@@ -587,11 +699,22 @@ TurbulenzEngine.onload = function onloadFn()
 
   function previewStart() {
     play_state = 'preview';
-    tick_time = PREVIEW_SPEED;
-    tick_countdown = 1;
+    tick_time = ADVANCE_SPEED;
+    tick_countdown = 0.01;
     dd.initActors();
   }
   function previewEnd() {
+    play_state = 'build';
+    dd.resetActors();
+  }
+  function advanceStart() {
+    play_state = 'advance';
+    tick_time = ADVANCE_SPEED;
+    tick_countdown = 0.01;
+    dd.initActors();
+  }
+  function advanceEnd() {
+    dd.advanceEnd();
     play_state = 'build';
     dd.resetActors();
   }
@@ -605,37 +728,116 @@ TurbulenzEngine.onload = function onloadFn()
       type: 'arrow',
       display_name: 'Turn',
     },
+    {
+      type: 'sell',
+      display_name: 'Sell',
+    },
   ];
+
+  function drawPanel(x, y, z, w, h) {
+    glov_ui.drawBox(sprites.panel, x, y, z, w, h, 80, [1,1,0.8,1]);
+  }
 
   function play(dt) {
     const BUTTON_H = 64;
     const BUTTON_W = 320;
+    const BUTTON_W_BUY = 64 + 20;
+    const BUTTON_H_BUY = 64 + 20;
+    const UI_BOTTOM = configureParams.viewportRectangle[3];
+    const UI_SIDE = configureParams.viewportRectangle[0];
+    let status = '';
+    let button_bottom_count = 0;
     if (play_state === 'build') {
-      if (glov_ui.buttonText(0, game_height - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
+      // Bottom UI
+      if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
         previewStart();
       }
+      ++button_bottom_count;
+      if (glov_ui.buttonText((BUTTON_W + 4)*button_bottom_count, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Go!')) {
+        advanceStart();
+      }
+      ++button_bottom_count;
 
+      // Side UI
+      drawPanel(UI_SIDE, 0, Z_UI - 1, 200, 400);
+      let x = UI_SIDE + 14;
+      let y = 10;
+      let font_size = 28;
+      let pad = 8;
+
+      default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+        `Money: ${dd.money}`);
+      y += font_size + pad;
+
+      default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+        'Build tools:');
+      y += font_size + pad;
+
+      let tools_w = 1;
+      let bx = x;
       for (let ii = 0; ii < store.length; ++ii) {
-        if (glov_ui.buttonText(0, (BUTTON_H + 4) * ii, Z_UI, BUTTON_W, BUTTON_H, store[ii].display_name)) {
-          current_tile = store[ii].type;
-          current_direction = 2;
+        let tile = 2;
+        if (current_tile === store[ii].type) {
+          tile = current_direction;
+        }
+        if (glov_ui.buttonImage(bx, y, Z_UI, BUTTON_W_BUY, BUTTON_H_BUY, sprites[store[ii].type], sprites[store[ii].type].rects[tile])) {
+          if (current_tile === store[ii].type && current_tile !== 'sell') {
+            current_direction = (current_direction + 1) % 4;
+          } else {
+            current_tile = store[ii].type;
+            current_direction = 2;
+          }
+        }
+        if (ii % tools_w === (tools_w - 1)) {
+          bx = x;
+          y += BUTTON_H_BUY + 2;
+        } else {
+          bx += BUTTON_W_BUY + 2;
         }
       }
-
-    } else if (play_state === 'preview') {
-      if (dt >= tick_countdown) {
-        dd.tick();
-        let dtr = dt - tick_countdown;
-        tick_countdown = Math.max(tick_time / 2, tick_time - dtr);
+      if (dd.dmoney) {
+        status = `Turn ${dd.turn + 1}; Last turn earnings: \$${dd.dmoney}`;
       } else {
-        tick_countdown -= dt;
+        status = `Turn ${dd.turn + 1}`;
       }
-      if (glov_ui.buttonText(0, game_height - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Stop Preview')) {
+    }
+    if (play_state === 'preview' || play_state === 'advance') {
+      let efftick_time = tick_time;
+      if (input.isKeyDown(keyCodes.F) || input.isKeyDown(keyCodes.LEFT_SHIFT) || input.isKeyDown(keyCodes.RIGHT_SHIFT)) {
+        efftick_time = ADVANCE_SPEED_FAST;
+      }
+      let effdt = dt / efftick_time;
+      if (effdt >= tick_countdown) {
+        dd.tick();
+        let dtr = effdt - tick_countdown;
+        tick_countdown = Math.max(0.5, 1 - dtr);
+      } else {
+        tick_countdown -= effdt;
+      }
+
+      if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
+        (tick_time === ADVANCE_SPEED) ? 'Speed: Regular' : 'Speed: Fast')
+      ) {
+        tick_time = (tick_time === ADVANCE_SPEED) ? ADVANCE_SPEED_FAST : ADVANCE_SPEED;
+      }
+    }
+    if (play_state === 'preview') {
+      if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Stop Preview')) {
         previewEnd();
       }
+      ++button_bottom_count;
+      status = `Turn ${dd.turn + 1} Predicted Earnings: \$${dd.dmoney}`;
+    }
+    if (play_state === 'advance') {
+      if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'End Turn')) {
+        advanceEnd();
+      }
+      ++button_bottom_count;
+      status = `Turn ${dd.turn + 1} Earnings: \$${dd.dmoney}`;
+    }
+    if (status) {
       const STATUS_H = 32;
-      default_font.drawSized(null, BUTTON_W + 10, game_height - STATUS_H - 4, Z_UI, STATUS_H, STATUS_H,
-        `Tick timer: ${(tick_countdown/1000).toFixed(2)}`);
+      default_font.drawSized(null, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
     }
 
     draw_list.queue(sprites.background, -TILE_SIZE * 20, -TILE_SIZE * 20, 1, [1, 1, 1, 1]);
@@ -648,6 +850,22 @@ TurbulenzEngine.onload = function onloadFn()
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     draw_list.queue(sprites.white, dd.map.length * TILE_SIZE, 0, 1.5, [0, 0, 0, 0.5],
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
+    if (DEBUG) {
+      // darken out-of-aspect
+      const extra = 1000;
+      draw_list.queue(sprites.white, -extra, -extra, 1.75, [1, 0, 0, 0.5],
+        [game_width + extra, extra, 1, 1]);
+      draw_list.queue(sprites.white, -extra, game_height, 1.75, [1, 0, 0, 0.5],
+        [game_width + extra, extra, 1, 1]);
+      draw_list.queue(sprites.white, -extra, 0, 1.75, [1, 0, 0, 0.5],
+        [extra, game_height, 1, 1]);
+      draw_list.queue(sprites.white, game_width, 0, 1.75, [1, 0, 0, 0.5],
+        [extra, game_height, 1, 1]);
+    }
+    let eff_current_tile = current_tile;
+    if (input.isKeyDown(keyCodes.LEFT_SHIFT) || input.isKeyDown(keyCodes.RIGHT_SHIFT)) {
+      eff_current_tile = 'sell';
+    }
     for (let ii = 0; ii < dd.map.length; ++ii) {
       let x = ii * TILE_SIZE;
       for (let jj = 0; jj < dd.map[ii].length; ++jj) {
@@ -655,16 +873,35 @@ TurbulenzEngine.onload = function onloadFn()
         let tile = dd.map[ii][jj];
         let do_draw = true;
         if (play_state === 'build') {
-          if (!tile || tile.type === current_tile) {
-            if (input.clickHit(x, y, TILE_SIZE, TILE_SIZE)) {
-              dd.buyTile(ii, jj, current_tile, current_direction);
-            } else if (input.isMouseOver(x, y, TILE_SIZE, TILE_SIZE)) {
-              let dir = current_direction;
-              if (tile && tile.type === current_tile) {
-                do_draw = false;
-                dir = tile.direction; //(tile.direction + 1) % 4;
+          if (eff_current_tile === 'sell') {
+            if (tile && (tile.type === 'base' || tile.type === 'resource')) {
+              // not sellable
+            } else {
+              if (tile && input.clickHit(x, y, TILE_SIZE, TILE_SIZE)) {
+                dd.buyTile(ii, jj, null);
+              } else if (input.isMouseOver(x, y, TILE_SIZE, TILE_SIZE)) {
+                if (!tile) {
+                  drawTile('sell', 0, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
+                } else {
+                  drawTile('sell', 0, ii, jj, Z_BUILD_TILE, [1, 1, 1, 1]);
+                }
               }
-              drawTile(current_tile, dir, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
+            }
+          } else {
+            if (!tile || tile.type === current_tile) {
+              if (input.clickHit(x, y, TILE_SIZE, TILE_SIZE)) {
+                dd.buyTile(ii, jj, current_tile, current_direction);
+                if (tile && tile.type === current_tile) {
+                  current_direction = tile.direction;
+                }
+              } else if (input.isMouseOver(x, y, TILE_SIZE, TILE_SIZE)) {
+                let dir = current_direction;
+                if (tile && tile.type === current_tile) {
+                  do_draw = false;
+                  dir = tile.direction; //(tile.direction + 1) % 4;
+                }
+                drawTile(current_tile, dir, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
+              }
             }
           }
         }
@@ -702,7 +939,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     // Draw interpolated actors
-    let progress = (1 - (tick_countdown / tick_time));
+    let progress = (1 - tick_countdown);
     // [0,0.5,1] -> [0,1,1]
     let blend = easeInOut(
       Math.min(1, Math.max(0, 2 * progress)),
@@ -741,6 +978,24 @@ TurbulenzEngine.onload = function onloadFn()
       if (actor.carrying) {
         // TODO: interpolate from source if we got it this frame
         drawTile('resource', actor.carrying, x, y, Z_ACTORS_CARRYING, color_white);
+      }
+    }
+
+    for (let ii = floaters.length - 1; ii >= 0; --ii) {
+      let fl = floaters[ii];
+      fl.t += dt;
+      let y = fl.y - easeOut(fl.t / FLOATER_TIME, 2) * FLOATER_DIST;
+      if (fl.t > FLOATER_TIME) {
+        floaters[ii] = floaters[floaters.length - 1];
+        floaters.pop();
+      } else {
+        /*jshint bitwise:false*/
+        let a = Math.min(1, (2 - 2 * fl.t / FLOATER_TIME)) * 255 | 0;
+        let style = glov_font.style(fl.style, {
+          color: fl.style.color & 0xFFFFFF00 | a,
+          outline_color: fl.style.outline_color & 0xFFFFFF00 | a,
+        });
+        default_font.drawSized(style, fl.x, y, fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
       }
     }
   }
