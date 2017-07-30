@@ -72,6 +72,7 @@ TurbulenzEngine.onload = function onloadFn()
     viewportRectangle : mathDevice.v4Build(0, 0, game_width, game_height)
   };
 
+  let sprites = {};
   let global_timer = 0;
   let game_state;
 
@@ -89,16 +90,342 @@ TurbulenzEngine.onload = function onloadFn()
     }
   }
 
+  let indicator_pos = {};
+  let tutorial_states = [
+    null,
+    {
+      msg: [
+        'Welcome to Drone Supervisor!',
+        'You earn money by having Drones',
+        'deliver resources to your base.',
+        'To get started, select the',
+        'Build Drone tool.',
+      ],
+      indicator_name: 'buy_drone',
+      indicator: {x: 100, y: 100},
+      done: function () {
+        return current_tile === 'drone';
+      },
+    },
+    {
+      msg: [
+        'Now, place a Drone in the',
+        'indicated square.',
+      ],
+      indicator: {x: 0, y: 3},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 0 && y === 3 && tile_type === 'drone';
+      },
+      done: function () {
+        return dd.map[0][3] && dd.map[0][3].type === 'drone';
+      },
+    },
+    {
+      msg: [
+        'Good job!',
+        'Now, we want this Drone to',
+        'travel to the right.',
+        'Click on the newly placed Drone',
+        'until he faces to the right,',
+        'towards your Base in the center',
+        'of the level.',
+      ],
+      indicator: {x: 0, y: 3},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 0 && y === 3 && tile_type === 'drone';
+      },
+      done: function () {
+        return dd.map[0][3] && dd.map[0][3].direction === 1;
+      },
+    },
+    {
+      msg: [
+        'Perfect. Let\'s see how',
+        'he\'ll do.  Click Preview.',
+      ],
+      indicator_name: 'preview',
+      done: function () {
+        return play_state === 'preview';
+      },
+    },
+    {
+      msg: null,
+      done: function () {
+        return dd.power < 0;
+      },
+    },
+    {
+      msg: [
+        'Great! He picked up and sold',
+        'one Gold, worth $100.',
+        'If you want to see that again,',
+        'choose Cancel, and click Preview',
+        'again.',
+        'To continue, click Next Turn,',
+        'cashing in your earnings.',
+      ],
+      indicator_name: 'next_turn',
+      done: function () {
+        return play_state === 'build' && dd.turn === 1;
+      },
+    },
+    {
+      msg: [
+        'Now it\'s another turn and',
+        'we have more money to spend.',
+        '',
+        'Let\s harvest the Silver, this',
+        'will require changint the',
+        'direction of Drones with Arrows.',
+        '',
+        'Select the Arrow tool.',
+      ],
+      indicator_name: 'buy_arrow',
+      done: function () {
+        return current_tile === 'arrow';
+      },
+    },
+    {
+      msg: [
+        'Now, place a Down Arrow in',
+        'the indicated square.',
+      ],
+      indicator: {x: 3, y: 6},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 3 && y === 6 && tile_type === 'arrow';
+      },
+      done: function () {
+        return dd.map[3][6] && dd.map[3][6].type === 'arrow' &&
+          dd.map[3][6].direction === 2;
+      },
+    },
+    {
+      msg: [
+        'And an Up Arrow in',
+        'this indicated square.',
+      ],
+      indicator: {x: 3, y: 7},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 3 && y === 7 && tile_type === 'arrow';
+      },
+      done: function () {
+        return dd.map[3][7] && dd.map[3][7].type === 'arrow' &&
+          dd.map[3][7].direction === 0;
+      },
+    },
+    {
+      msg: [
+        'Great!',
+        '',
+        'Now, a Drone facing left here.',
+      ],
+      indicator: {x: 4, y: 6},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 4 && y === 6 && tile_type === 'drone';
+      },
+      done: function () {
+        return dd.map[4][6] && dd.map[4][6].type === 'drone' &&
+          dd.map[4][6].direction === 3;
+      },
+    },
+    {
+      msg: [
+        'One last thing, let\'s move',
+        'our first drone somewhere',
+        'better.',
+        '',
+        'Pick it up by right clicking,',
+        'shift-clicking, or using the',
+        'Sell tool.',
+      ],
+      indicator: {x: 0, y: 3},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 0 && y === 3 && !tile_type;
+      },
+      done: function () {
+        return !dd.map[0][3];
+      },
+    },
+    {
+      msg: [
+        'Put it back down, facing right,',
+        'right here.',
+      ],
+      indicator: {x: 2, y: 4},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 2 && y === 4 && tile_type === 'drone';
+      },
+      done: function () {
+        return dd.map[2][4] && dd.map[2][4].type === 'drone' &&
+          dd.map[2][4].direction === 1;
+      },
+    },
+    {
+      msg: [
+        'Perfect. Let\'s get some',
+        'more money.  Click Preview.',
+      ],
+      indicator_name: 'preview',
+      done: function () {
+        return play_state === 'preview';
+      },
+    },
+    {
+      msg: null,
+      done: function () {
+        return dd.power < 0;
+      },
+    },
+    {
+      msg: [
+        'See how the left Drone stayed',
+        'in one place and sold all of',
+        'the Gold?',
+        'Notice the right Drone following',
+        'the arrows we placed.',
+        '',
+        'To continue, click Next Turn,',
+        'cashing in your earnings.',
+      ],
+      indicator_name: 'next_turn',
+      done: function () {
+        return play_state === 'build' && dd.turn === 2;
+      },
+    },
+    {
+      msg: [
+        'At the top, it says our goal',
+        'is to Craft and Sell 1',
+        'jewlery.  We do not have enough',
+        'money to build a crafting',
+        'station yet, so run one more turn',
+        'with this same configuration.',
+      ],
+      indicator_name: 'preview',
+      done: function () {
+        return play_state === 'preview';
+      },
+    },
+    {
+      msg: null,
+      done: function () {
+        return dd.power < 0;
+      },
+    },
+    {
+      msg: [
+        'Great, that should be',
+        'enough money!',
+      ],
+      indicator_name: 'next_turn',
+      done: function () {
+        let ret = play_state === 'build' && dd.turn === 3;
+        if (ret) {
+          dd.money = 1400;
+        }
+        return ret;
+      },
+    },
+    {
+      msg: [
+        'Now, remove both drones and',
+        'both arrows to reclaim our',
+        'money.',
+      ],
+      indicator_name: 'buy_sell',
+      buy_validate: function (x, y, tile_type, dir) {
+        return !tile_type;
+      },
+      done: function () {
+        return dd.countOf('drone') + dd.countOf('arrow') === 0;
+      },
+    },
+    {
+      msg: [
+        'Select the 2-Node Crafting',
+        'Station.',
+      ],
+      indicator_name: 'buy_craft2',
+      done: function () {
+        return current_tile === 'craft2';
+      },
+    },
+    {
+      msg: [
+        'And place it here, with the',
+        'Output node (red) in the',
+        'upper right.',
+      ],
+      indicator: {x: 1, y: 6},
+      buy_validate: function (x, y, tile_type, dir) {
+        return x === 1 && y === 6 && tile_type === 'craft2';
+      },
+      done: function () {
+        return dd.map[1][6] && dd.map[1][6].type === 'craft2' &&
+          dd.map[1][6].direction === 0;
+      },
+    },
+    {
+      msg: [
+        'Finally, place 3 Drones and',
+        '2 Arrows in the configuration',
+        'shown here:',
+        '','','',
+        '','','',
+        '','','',
+        '','',
+      ],
+      buy_validate: function (x, y, tile_type, dir) {
+        return x >=0 && x <=3 && y >= 5 && y <= 8;
+      },
+      done: function () {
+        draw_list.queue(sprites.tutorial1,
+          configureParams.viewportRectangle[2] - 380,
+          configureParams.viewportRectangle[3] - 350,
+          Z_TUT + 3, color_white);
+        let test = [
+          [0,8,'drone',1],
+          [1,5,'drone',2],
+          [3,6,'drone',0],
+          [1,6,'craft2',0],
+          [1,8,'arrow',1],
+          [2,8,'arrow',3],
+        ];
+        for (let ii = 0; ii < test.length; ++ii) {
+          let t = test[ii];
+          if (dd.map[t[0]][t[1]] && dd.map[t[0]][t[1]].type === t[2] &&
+            dd.map[t[0]][t[1]].direction === t[3]
+          ) {
+            // good
+          } else {
+            return false;
+          }
+        }
+        return true;
+      },
+    },
+    {
+      msg: [
+        'You\'ve done it!',
+        'Play out the turn to complete',
+        'the tutorial.',
+      ],
+      indicator_name: 'preview',
+      done: function () {
+        return play_state === 'preview';
+      },
+    },
+  ];
+
   const Z_TILES = 10;
-  const Z_TILES_RESOURCE = 20;
   const Z_BUILD_TILE = 30;
   const Z_ACTORS = 40;
   const Z_ACTORS_CARRYING = 50;
   const Z_UI = 100;
+  const Z_TUT = 150;
   const Z_FLOAT = 200;
   let view_offset = [100,100];
 
-  let sprites = {};
   const BASE_SIZE = 3;
   const TILE_SIZE = 64;
   function initGraphics() {
@@ -137,6 +464,13 @@ TurbulenzEngine.onload = function onloadFn()
       textureRectangle : mathDevice.v4Build(0, 0, spriteSize * 4 * background_tile, spriteSize * 4 * background_tile),
       origin: [0,0],
     });
+    sprites.tutorial1 = createSprite('tutorial1.png', {
+      width : TILE_SIZE * 4,
+      height : TILE_SIZE * 4,
+      rotation : 0,
+      textureRectangle : mathDevice.v4Build(0, 0, 128, 128),
+      origin: [0,0],
+    });
     function loadSprite(name, tx, ty, sx, sy) {
       sprites[name] = createSprite(name + '.png', {
         width : TILE_SIZE * (sx || 1),
@@ -151,6 +485,7 @@ TurbulenzEngine.onload = function onloadFn()
     loadSprite('arrow', 2, 2);
     loadSprite('resource', 2, 3);
     loadSprite('sell', 1, 1);
+    loadSprite('green_arrow', 1, 1);
     loadSprite('upgrade_power', 1, 1);
     loadSprite('base', 1, 1, BASE_SIZE, BASE_SIZE);
     loadSprite('craft2', 2, 2, 2, 2);
@@ -412,7 +747,7 @@ TurbulenzEngine.onload = function onloadFn()
   };
 
   let level_defs = [];
-  if (DEBUG) {
+  if (DEBUG && false) {
     level_defs.push({
       name: 'test', seed: 'test', w: 9, h: 9,
       starting_max_power: 6,
@@ -424,14 +759,15 @@ TurbulenzEngine.onload = function onloadFn()
     });
   }
   level_defs.push({
+    tut: true,
     name: 'Tutorial', seed: 'na', w: 9, h: 9,
     starting_max_power: 5,
     resources: {
-      gold: [[1, 5]],
+      gold: [[1, 4]],
       silver: [[3, 8]],
     },
     goal: ['sell', 'jewelry'],
-    starting_money: 200,
+    starting_money: 500,
   },
   {
     name: 'Level 1', seed: 'droneday', w: 20, h: 14,
@@ -500,6 +836,13 @@ TurbulenzEngine.onload = function onloadFn()
 
     startLevel(ld) {
       this.ld = ld;
+      this.tutorial_state = ld.tut ? 1 : 0;
+      if (ld.tut) {
+        current_tile = 'sell';
+      } else {
+        current_tile = 'drone';
+      }
+
       this.turn = 0;
       this.max_power = ld.starting_max_power;
       this.money = ld.starting_money;
@@ -631,6 +974,13 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     buyTile(x, y, tile_type, dir) {
+      if (this.tutorial_state && tutorial_states[this.tutorial_state] && (
+        !tutorial_states[this.tutorial_state].buy_validate ||
+        !tutorial_states[this.tutorial_state].buy_validate(x, y, tile_type, dir)
+      )) {
+        floatText(x, y, 2000, 'Invalid (please follow directions)', font_style_buy);
+        return;
+      }
       if (x <0 || y < 0 || x >= this.map.length || y >= this.map[0].length) {
         return;
       }
@@ -1071,10 +1421,10 @@ TurbulenzEngine.onload = function onloadFn()
     $('#play').show();
     game_state = play;
     dd = new DroneDayState();
-    current_tile = 'drone';
     current_direction = 2;
     if (DEBUG) {
       dd.startLevel(level_defs[0]);
+      dd.tutorial_state = 22;
       play_state = 'build';
     } else {
       play_state = 'menu';
@@ -1267,6 +1617,9 @@ TurbulenzEngine.onload = function onloadFn()
   let panning_lastpos = null;
   let panning_start = null;
   function doPanning() {
+    if (dd.ld.tut) {
+      return;
+    }
     let pan = input.isKeyDown(keyCodes.SPACE) || input.isMouseDown(0) || input.isMouseDown(1) || input.isMouseDown(2);
     if (pan && !panning_active) {
       panning_active = true;
@@ -1304,6 +1657,7 @@ TurbulenzEngine.onload = function onloadFn()
   let sell_clicks = 0;
   let show_recipes = false;
   function play(dt) {
+    indicator_pos.next_turn = null;
     const BUTTON_H = 64;
     const BUTTON_W = 320;
     const BUTTON_W_BUY = 64 + 20;
@@ -1318,8 +1672,13 @@ TurbulenzEngine.onload = function onloadFn()
     let button_bottom_count = 0;
     if (play_state === 'build') {
       // Bottom UI
+      indicator_pos.preview = { x: BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H};
       if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
-        previewStart();
+        if (dd.tutorial_state && tutorial_states[dd.tutorial_state] && tutorial_states[dd.tutorial_state].indicator_name !== 'preview') {
+          floatTextUI(0, UI_BOTTOM - BUTTON_H, 2000, 'Invalid (please follow directions)', font_style_buy);
+        } else {
+          previewStart();
+        }
       }
       if (glov_ui.button_mouseover) {
         tooltipOver((BUTTON_W + 4) * button_bottom_count, UI_BOTTOM - BUTTON_H, [
@@ -1386,6 +1745,7 @@ TurbulenzEngine.onload = function onloadFn()
         if (current_tile === store[ii].type) {
           tile = current_direction;
         }
+        indicator_pos['buy_' + store[ii].type] = { x: bx + BUTTON_H_BUY / 2, y: y + 16 };
         if (buttonTooltip(bx, y, Z_UI, BUTTON_W_BUY, BUTTON_H_BUY, sprites[store[ii].type], sprites[store[ii].type].rects[tile], TOOLTIP_X, store[ii].tooltip) ||
           input.keyDownHit(keyCodes['NUMBER_' + (1 + ii)])
         ) {
@@ -1529,6 +1889,7 @@ TurbulenzEngine.onload = function onloadFn()
       ++button_bottom_count;
 
       if (dd.power < 0) {
+        indicator_pos.next_turn = { x: game_width - BUTTON_W +  BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H};
         if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
           dd.goal_reached ? 'Victory!' : 'Next Turn')
         ) {
@@ -1648,6 +2009,44 @@ TurbulenzEngine.onload = function onloadFn()
       let bar_h = BUTTON_H + 16;
       drawPanel(configureParams.viewportRectangle[0] - 64, UI_BOTTOM - bar_h, 1.75,
         configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0] + 128, bar_h + 64);
+
+      let tut_state = tutorial_states[dd.tutorial_state];
+      if (tut_state) {
+        let tut_msg = tut_state.msg;
+        if (tut_msg) {
+          let font_size = 24;
+          let tut_h = tut_msg.length * font_size + font_size * 1.5 + 16*2;
+          let tut_w = 400;
+          let tut_x = configureParams.viewportRectangle[2] - tut_w;
+          let tut_y0 = configureParams.viewportRectangle[3] - bar_h - tut_h;
+          let tut_y = tut_y0 + 16;
+          default_font.drawSized(panel_font_style, tut_x + 16, tut_y, Z_TUT, font_size * 1.5, font_size * 1.5,
+            'Tutorial');
+          tut_y += font_size * 1.5;
+          for (let ii = 0; ii < tut_msg.length; ++ii) {
+            default_font.drawSized(panel_font_style, tut_x + 16, tut_y, Z_TUT, font_size, font_size,
+              tut_msg[ii]);
+            tut_y += font_size;
+          }
+          drawPanel(tut_x, tut_y0, Z_TUT, tut_w, tut_h);
+        }
+        let indicator;
+        if (tut_state.indicator) {
+          indicator = {
+            x: tut_state.indicator.x * TILE_SIZE + view_offset[0] + TILE_SIZE / 2,
+            y: tut_state.indicator.y * TILE_SIZE + view_offset[1] + 32,
+          };
+        }
+        if (tut_state.indicator_name) {
+          indicator = indicator_pos[tut_state.indicator_name];
+        }
+        if (indicator) {
+          draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+        }
+        if (tut_state.done && tut_state.done()) {
+          dd.tutorial_state++;
+        }
+      }
     }
 
     doPanning();

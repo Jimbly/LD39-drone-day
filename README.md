@@ -1,19 +1,21 @@
 LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
-Next steps:
+Must:
+* show recipes
+* configure 3-5 levels
 * sounds
-* tutorial
+* art polish:
+  * resources
+Want:
 * art polish:
   * base, crafting - look more unique/obvious?
-  * resources
   * background slightly more interesting
   * display money on center of base?
   * brighter colors?
-
-Build:
-* transfer
-* rotate (as two more "directions" on arrows?)
+* Build:
+  * transfer
+  * rotate? (as two more "directions" on arrows?)
 
 Balance so far:
   Earliest crafting I was able to do was turn 10 (not enough power upgrades)
