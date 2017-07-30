@@ -2,8 +2,8 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Next steps:
-* goal
 * sounds
+* tutorial
 * art polish:
   * base, crafting - look more unique/obvious?
   * resources
