@@ -2,7 +2,6 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Next steps:
-* animate resource movement
 * scrolling, bigger map?  at least need to get out from under the panel!
 * tooltips on tools
 * goal

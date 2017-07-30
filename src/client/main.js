@@ -7,7 +7,7 @@
 /*global VMath: false */
 /*global assert: false */
 
-const DEBUG = false;
+const DEBUG = true;
 
 TurbulenzEngine.onload = function onloadFn()
 {
@@ -247,7 +247,7 @@ TurbulenzEngine.onload = function onloadFn()
   });
 
 
-  let STARTING_MONEY = 600;
+  let STARTING_MONEY = DEBUG ? 10000 : 600;
   let STARTING_MAX_POWER = 6;
 
   const MAP_W = 20;
@@ -655,12 +655,15 @@ TurbulenzEngine.onload = function onloadFn()
         return;
       }
       for (let ii = 0; ii < dx.length; ++ii) {
-        let target_actor = this.getActor(ticker.x + dx[ii], ticker.y + dy[ii]);
+        let target_x = ticker.x + dx[ii];
+        let target_y = ticker.y + dy[ii];
+        let target_actor = this.getActor(target_x, target_y);
         if (!target_actor || target_actor.gain_resource_tick === this.tick_id) {
           continue;
         }
         if (!target_actor.carrying) {
           target_actor.carrying = tile.resource;
+          this.resource_transfers.push([tile.resource, ticker.x, ticker.y, target_x, target_y]);
           target_actor.gain_resource_tick = this.tick_id;
           --tile.quantity;
           if (!tile.quantity) {
@@ -696,13 +699,17 @@ TurbulenzEngine.onload = function onloadFn()
           // already full
           continue;
         }
-        let target_actor = this.getActor(ticker.x + base_slurp_coords[jj][0], ticker.y + base_slurp_coords[jj][1]);
+        let target_x = ticker.x + base_slurp_coords[jj][0];
+        let target_y = ticker.y + base_slurp_coords[jj][1];
+        let target_actor = this.getActor(target_x, target_y);
         if (!target_actor || target_actor.gain_resource_tick === this.tick_id) {
           continue;
         }
         if (target_actor.carrying) {
           tile.contents = tile.contents || [];
           tile.contents[target_contents] = target_actor.carrying;
+          this.resource_transfers.push([target_actor.carrying, target_x, target_y,
+            ticker.x + base_contents_coords[target_contents][0], ticker.y + base_contents_coords[target_contents][1]]);
           target_actor.carrying = null;
           target_actor.gain_resource_tick = this.tick_id;
         }
@@ -725,9 +732,17 @@ TurbulenzEngine.onload = function onloadFn()
         }
         if (full) {
           // craft!
-          let res = craftResult(tile.contents.slice(index0));
+          let ingred = tile.contents.slice(index0);
+          let res = craftResult(ingred);
           let message = [];
           let orig_val = 0;
+          this.craftings.push({
+            x: ticker.x,
+            y: ticker.y,
+            ingred,
+            res,
+            tile,
+          });
           for (let ii = index0; ii < 4; ++ii) {
             message.push(resource_types[tile.contents[ii]].type);
             orig_val += resource_types[tile.contents[ii]].value;
@@ -748,6 +763,7 @@ TurbulenzEngine.onload = function onloadFn()
 
       // attempt to spread output, slurp input
       let slurp_coords = craft_slurp_coords[tile.type];
+      let contents_coords = craft_contents_coords[tile.type];
       for (let jj = 0; jj < slurp_coords.length; ++jj) {
         let target_contents = (slurp_coords[jj][2] + 4 - tile.direction) % 4;
         if (tile.type === 'craft2' && target_contents === 1) {
@@ -764,19 +780,25 @@ TurbulenzEngine.onload = function onloadFn()
           continue;
         }
         // look for actor
-        let target_actor = this.getActor(ticker.x + slurp_coords[jj][0], ticker.y + slurp_coords[jj][1]);
+        let target_x = ticker.x + slurp_coords[jj][0];
+        let target_y = ticker.y + slurp_coords[jj][1];
+        let target_actor = this.getActor(target_x, target_y);
         if (!target_actor || target_actor.gain_resource_tick === this.tick_id) {
           continue;
         }
+        let target_content_x = ticker.x + contents_coords[slurp_coords[jj][2]][0];
+        let target_content_y = ticker.y + contents_coords[slurp_coords[jj][2]][1];
         if (is_out && !target_actor.carrying) {
           // output
           target_actor.carrying = tile.contents[target_contents];
+          this.resource_transfers.push([target_actor.carrying, target_content_x, target_content_y, target_x, target_y]);
           target_actor.gain_resource_tick = this.tick_id;
           tile.contents[target_contents] = null;
         } else if (!is_out && target_actor.carrying) {
           // input
           tile.contents = tile.contents || [];
           tile.contents[target_contents] = target_actor.carrying;
+          this.resource_transfers.push([target_actor.carrying, target_x, target_y, target_content_x, target_content_y]);
           target_actor.carrying = null;
           target_actor.gain_resource_tick = this.tick_id;
         }
@@ -878,6 +900,8 @@ TurbulenzEngine.onload = function onloadFn()
 
     tick() {
       ++this.tick_id;
+      this.resource_transfers = [];
+      this.craftings = [];
       for (let ii = 0; ii < this.busy.length; ++ii) {
         for (let jj = 0; jj < this.busy[ii].length; ++jj) {
           this.busy[ii][jj] = 0;
@@ -925,38 +949,39 @@ TurbulenzEngine.onload = function onloadFn()
     floaters = [];
 
     if (DEBUG) {
-      if (0) {
-        dd.buyTile(2, 3, 'drone', 2);
+      // dd.buyTile(2, 3, 'drone', 2);
 
-        dd.buyTile(2, 4, 'arrow', 1);
+      // dd.buyTile(2, 4, 'arrow', 1);
 
-        dd.buyTile(5, 7, 'drone', 1);
-
-
-        // dd.buyTile(10, 3, 'drone', 2);
-        // dd.buyTile(10, 4, 'drone', 0);
-
-        dd.buyTile(5, 2, 'drone', 1);
-        dd.buyTile(6, 4, 'drone', 0);
-        dd.buyTile(7, 3, 'drone', 2);
-        dd.buyTile(8, 3, 'drone', 3);
+      dd.buyTile(5, 7, 'drone', 1);
 
 
-        dd.buyTile(11, 2, 'drone', 1);
-        dd.buyTile(12, 4, 'drone', 0);
-        dd.buyTile(13, 1, 'drone', 2);
-        dd.buyTile(14, 3, 'drone', 3);
-        dd.buyTile(12, 2, 'arrow', 1);
-        dd.buyTile(12, 3, 'arrow', 0);
-        dd.buyTile(13, 2, 'arrow', 2);
-        dd.buyTile(13, 3, 'arrow', 3);
+      // dd.buyTile(10, 3, 'drone', 2);
+      // dd.buyTile(10, 4, 'drone', 0);
 
-        // dd.buyTile(4, 10, 'drone', 2);
-        // dd.buyTile(4, 12, 'drone', 0);
+      // dd.buyTile(5, 2, 'drone', 1);
+      // dd.buyTile(6, 4, 'drone', 0);
+      dd.buyTile(7, 3, 'drone', 2);
+      // dd.buyTile(8, 3, 'drone', 3);
 
-        dd.buyTile(6, 7, 'arrow', 2);
-        dd.buyTile(6, 8, 'craft2', 1);
-      }
+
+      // dd.buyTile(11, 2, 'drone', 1);
+      // dd.buyTile(12, 4, 'drone', 0);
+      // dd.buyTile(13, 1, 'drone', 2);
+      // dd.buyTile(14, 3, 'drone', 3);
+      // dd.buyTile(12, 2, 'arrow', 1);
+      // dd.buyTile(12, 3, 'arrow', 0);
+      // dd.buyTile(13, 2, 'arrow', 2);
+      // dd.buyTile(13, 3, 'arrow', 3);
+
+      // dd.buyTile(4, 10, 'drone', 2);
+      // dd.buyTile(4, 12, 'drone', 0);
+
+      dd.buyTile(6, 7, 'arrow', 2);
+      dd.buyTile(6, 8, 'craft2', 1);
+      dd.buyTile(8, 9, 'arrow', 1);
+      dd.buyTile(9, 9, 'arrow', 3);
+      dd.buyTile(8, 10, 'drone', 0);
 
       previewStart();
     } else {
@@ -1332,8 +1357,26 @@ TurbulenzEngine.onload = function onloadFn()
                 let ci = (contents_index + idx_offs) % idx_max;
                 let res = tile.contents[contents_index];
                 if (res) {
+                  // look for resource transfered to us this frame (will be drawn on actor)
                   let coords = mapping[ci];
-                  drawTile('resource', resource_types[res].tile, ii + coords[0], jj + coords[1], Z_TILES_RESOURCE, color_white);
+                  let rt = null;
+                  for (let rti = 0; rti < dd.resource_transfers.length; ++rti) {
+                    let rtt = dd.resource_transfers[rti];
+                    if (rtt[3] === ii + coords[0] && rtt[4] === jj + coords[1]) {
+                      rt = rtt;
+                    }
+                  }
+                  if (contents_index === 0) {
+                    // look for craftings happening this frame
+                    for (let craft_index = 0; craft_index < dd.craftings.length; ++craft_index) {
+                      if (dd.craftings[craft_index].x === ii && dd.craftings[craft_index].y === jj) {
+                        rt = dd.craftings[craft_index];
+                      }
+                    }
+                  }
+                  if (!rt) {
+                    drawTile('resource', resource_types[res].tile, ii + coords[0], jj + coords[1], Z_ACTORS_CARRYING, color_white);
+                  }
                 }
               }
             }
@@ -1352,9 +1395,15 @@ TurbulenzEngine.onload = function onloadFn()
       Math.min(1, Math.max(0, 2 * progress)),
       2
     );
+    let craft_blend = blend;
     // [0,bump_time,bump_time*2,1] = [0,0.3,0,0];
     let bump_time = 0.2;
     let bump_blend = 0.3 * easeIn(Math.max(0, 1 - 1/bump_time * Math.abs(bump_time - progress)), 2);
+    // [0,0.5,1] -> [0,0,1]
+    let resource_blend = easeInOut(
+      Math.min(1, Math.max(0, 2 * progress - 1)),
+      2
+    );
     for (let ii = 0; ii < dd.actors.length; ++ii) {
       let actor = dd.actors[ii];
       let lastx = actor.lastx;
@@ -1387,8 +1436,62 @@ TurbulenzEngine.onload = function onloadFn()
       //   drawTile('arrow', direction, x, y, Z_ACTORS + 0.5, [0, 1, 0, 1]);
       // }
       if (actor.carrying) {
-        // TODO: interpolate from source if we got it this frame
-        drawTile('resource', resource_types[actor.carrying].tile, x, y, Z_ACTORS_CARRYING, color_white);
+        // do resources transfered to us
+        let rt = null;
+        for (let ii = 0; ii < dd.resource_transfers.length; ++ii) {
+          let rtt = dd.resource_transfers[ii];
+          // Look for a resource transfered to us
+          if (rtt[3] === actor.x && rtt[4] === actor.y) {
+            rt = rtt;
+          }
+        }
+        let rx = x;
+        let ry = y;
+        if (rt) {
+          rx = rt[1] + (rt[3] - rt[1]) * resource_blend;
+          ry = rt[2] + (rt[4] - rt[2]) * resource_blend;
+        }
+        drawTile('resource', resource_types[actor.carrying].tile, rx, ry, Z_ACTORS_CARRYING, color_white);
+      }
+      // do resources transfered from us
+      let rt = null;
+      for (let ii = 0; ii < dd.resource_transfers.length; ++ii) {
+        let rtt = dd.resource_transfers[ii];
+        // Look for a resource transfered from us
+        if (rtt[1] === actor.x && rtt[2] === actor.y) {
+          rt = rtt;
+        }
+      }
+      if (rt) {
+        let rx = x + (rt[3] - x) * resource_blend;
+        let ry = y + (rt[4] - y) * resource_blend;
+        drawTile('resource', resource_types[rt[0]].tile, rx, ry, Z_ACTORS_CARRYING, color_white);
+      }
+    }
+
+    // interpolated crafting
+    for (let ii = 0; ii < dd.craftings.length; ++ii) {
+      let craft = dd.craftings[ii];
+      let type = craft.tile.type;
+      let contents_coords = craft_contents_coords[type];
+      let target = contents_coords[craft.tile.direction];
+      for (let jj = 0; jj < craft.ingred.length; ++jj) {
+        let idx = (4 - (craft.ingred.length - jj) + craft.tile.direction) % 4;
+        let src = contents_coords[idx];
+        let x = craft.x + src[0] + (target[0] - src[0]) * craft_blend;
+        let y = craft.y + src[1] + (target[1] - src[1]) * craft_blend;
+        drawTile('resource', resource_types[craft.ingred[jj]].tile, x, y, Z_ACTORS_CARRYING-1, [1,1,1, 1-craft_blend]);
+      }
+      // was this resource already tnasfered away?
+      let rt;
+      for (let rti = 0; rti < dd.resource_transfers.length; ++rti) {
+        let rtt = dd.resource_transfers[rti];
+        if (rtt[1] === craft.x + target[0] && rtt[2] === craft.y + target[1]) {
+          rt = rtt;
+        }
+      }
+      if (!rt) {
+        drawTile('resource', resource_types[craft.res].tile, craft.x + target[0], craft.y + target[1], Z_ACTORS_CARRYING, [1,1,1,craft_blend]);
       }
     }
 
