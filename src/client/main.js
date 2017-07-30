@@ -72,8 +72,8 @@ TurbulenzEngine.onload = function onloadFn()
     viewportRectangle : mathDevice.v4Build(0, 0, game_width, game_height)
   };
 
-  var global_timer = 0;
-  var game_state;
+  let global_timer = 0;
+  let game_state;
 
   function titleInit(dt) {
     $('.screen').hide();
@@ -96,7 +96,7 @@ TurbulenzEngine.onload = function onloadFn()
   const Z_ACTORS_CARRYING = 50;
   const Z_UI = 100;
   const Z_FLOAT = 200;
-
+  let view_offset = [100,100];
 
   let sprites = {};
   const BASE_SIZE = 3;
@@ -250,8 +250,6 @@ TurbulenzEngine.onload = function onloadFn()
   let STARTING_MONEY = DEBUG ? 10000 : 600;
   let STARTING_MAX_POWER = 6;
 
-  const MAP_W = 20;
-  const MAP_H = 14;
   const actor_types = { 'drone': true };
   const nonblocking_types = { 'arrow': true };
   const ticked_types = {
@@ -406,36 +404,33 @@ TurbulenzEngine.onload = function onloadFn()
   const FLOATER_SIZE = 24;
   const FLOATER_DIST = 32;
   let floaters = [];
-  function floatText(x, y, time, text, style) {
+  function floatText(x, y, time, text, style, is_ui) {
     floaters.push({
       x: x * TILE_SIZE, y: y * TILE_SIZE, z: Z_FLOAT, text, style,
       t: 0,
       time,
+      is_ui,
     });
   }
-  function floatTextUI(x, y, time, text, style) {
-    floatText(x / TILE_SIZE, y / TILE_SIZE, time, text, style);
+  function floatTextUI(x, y, time, text, style, is_ui) {
+    floatText(x / TILE_SIZE, y / TILE_SIZE, time, text, style, true);
   }
 
   const POWER_STEP = 2;
   class DroneDayState {
-    constructor() {
-      let rand = random_seed.create('droneday');
-      this.turn = 0;
-      this.tick_id = 0;
-      this.max_power = STARTING_MAX_POWER;
-      this.money = STARTING_MONEY;
-      this.map = new Array(MAP_W);
-      this.busy = new Array(MAP_W);
-      this.actor_map = new Array(MAP_W);
-      for (let ii = 0; ii < MAP_W; ++ii) {
-        this.map[ii] = new Array(MAP_H);
-        this.busy[ii] = new Array(MAP_H);
-        this.actor_map[ii] = new Array(MAP_H);
+
+    allocLevel(w, h) {
+      this.map = new Array(w);
+      this.busy = new Array(w);
+      this.actor_map = new Array(w);
+      for (let ii = 0; ii < w; ++ii) {
+        this.map[ii] = new Array(h);
+        this.busy[ii] = new Array(h);
+        this.actor_map[ii] = new Array(h);
       }
       // Generate base in middle
-      let base_x = Math.round((MAP_W - 3) / 2);
-      let base_y = Math.round((MAP_H - 3) / 2);
+      let base_x = Math.round((w - 3) / 2);
+      let base_y = Math.round((h - 3) / 2);
       for (let ii = 0; ii < BASE_SIZE; ++ii) {
         for (let jj = 0; jj < BASE_SIZE; ++jj) {
           this.map[base_x + ii][base_y + jj] = {
@@ -445,6 +440,19 @@ TurbulenzEngine.onload = function onloadFn()
         }
       }
       this.map[base_x][base_y].nodraw = false;
+      view_offset = [
+        PANEL_W + ((game_width - PANEL_W) - w * TILE_SIZE) / 2,
+        (game_height - h * TILE_SIZE) / 2,
+      ];
+    }
+
+    constructor() {
+      let rand = random_seed.create('droneday');
+      this.turn = 0;
+      this.tick_id = 0;
+      this.max_power = STARTING_MAX_POWER;
+      this.money = STARTING_MONEY;
+      this.allocLevel(20, 14);
 
       // Generate resources
       let open_tiles = [];
@@ -528,6 +536,9 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     buyTile(x, y, tile_type, dir) {
+      if (x <0 || y < 0 || x >= this.map.length || y >= this.map[0].length) {
+        return;
+      }
       let tile = this.map[x][y];
       let dmoney = 0;
       if (!tile_type) {
@@ -1012,7 +1023,7 @@ TurbulenzEngine.onload = function onloadFn()
     if (s.rects) {
       tex_rect = s.rects[direction];
     }
-    draw_list.queue(s, x * TILE_SIZE, y * TILE_SIZE, z, color, null, tex_rect);
+    draw_list.queue(s, x * TILE_SIZE + view_offset[0], y * TILE_SIZE + view_offset[1], z, color, null, tex_rect);
   }
 
   function easeInOut(v, a)
@@ -1136,6 +1147,43 @@ TurbulenzEngine.onload = function onloadFn()
     return ret;
   }
 
+  let panning_active = false;
+  let panning_lastpos = null;
+  let panning_start = null;
+  function doPanning() {
+    let pan = input.isKeyDown(keyCodes.SPACE) || input.isMouseDown(0) || input.isMouseDown(1) || input.isMouseDown(2);
+    if (pan && !panning_active) {
+      panning_active = true;
+      panning_start = panning_lastpos = input.mousePos();
+    } else if (!pan && panning_active) {
+      panning_active = false;
+      panning_lastpos = null;
+      let newpos = input.mousePos();
+      let delta = [newpos[0] - panning_start[0], newpos[1] - panning_start[1]];
+      if (Math.abs(delta[0]) + Math.abs(delta[1]) > 20) {
+        input.clickHit(-Infinity, -Infinity, Infinity, Infinity);
+      }
+    } else if (pan) {
+      let newpos = input.mousePos();
+      let delta = [newpos[0] - panning_lastpos[0], newpos[1] - panning_lastpos[1]];
+      panning_lastpos = newpos;
+      view_offset[0] += delta[0];
+      view_offset[1] += delta[1];
+    }
+  }
+
+  function tooltipOver(x, y, tooltip) {
+    let tx = x + 16;
+    let h = 8 + tooltip.length * TOOLTIP_FONT_SIZE + 8;
+    let ty0 = y - h;
+    let ty = ty0 + 8;
+    for (let ii = 0; ii < tooltip.length; ++ii) {
+      default_font.drawSized(panel_font_style, tx, ty, Z_UI + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
+      ty += TOOLTIP_FONT_SIZE;
+    }
+    drawPanel(x, ty0, Z_UI+1, TOOLTIP_W, h);
+  }
+
   let money_x, money_y;
   let sell_clicks = 0;
   let show_recipes = false;
@@ -1156,6 +1204,15 @@ TurbulenzEngine.onload = function onloadFn()
       // Bottom UI
       if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
         previewStart();
+      }
+      if (glov_ui.button_mouseover) {
+        tooltipOver((BUTTON_W + 4) * button_bottom_count, UI_BOTTOM - BUTTON_H, [
+          'Unleash the drones!',
+          'Do not worry, you can',
+          'return and make',
+          'adjustments before',
+          'ending your turn.',
+        ]);
       }
       ++button_bottom_count;
 
@@ -1313,6 +1370,15 @@ TurbulenzEngine.onload = function onloadFn()
       ) {
         previewEnd();
       }
+      if (glov_ui.button_mouseover) {
+        tooltipOver((BUTTON_W + 4) * button_bottom_count, UI_BOTTOM - BUTTON_H, [
+          'Return to building,',
+          'gaining nothing,',
+          'but not wasting a',
+          'turn.',
+        ]);
+      }
+
       ++button_bottom_count;
 
       if (dd.power < 0) {
@@ -1322,11 +1388,26 @@ TurbulenzEngine.onload = function onloadFn()
           advanceEnd();
           floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `+\$${dd.dmoney}`, font_style_sale);
         }
+        if (glov_ui.button_mouseover) {
+          tooltipOver(game_width - TOOLTIP_W, UI_BOTTOM - BUTTON_H, [
+            'Collect your earnings',
+            `(\$${dd.dmoney}) and start`,
+            'your next turn.'
+          ]);
+        }
       } else {
         if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
           (tick_time === ADVANCE_SPEED) ? 'Speed: Regular' : 'Speed: Fast')
         ) {
           tick_time = (tick_time === ADVANCE_SPEED) ? ADVANCE_SPEED_FAST : ADVANCE_SPEED;
+        }
+        if (glov_ui.button_mouseover) {
+          tooltipOver(game_width - TOOLTIP_W, UI_BOTTOM - BUTTON_H, [
+            'Toggle simulation speed',
+            'between fast and regular.',
+            'You may also hold SHIFT',
+            'or F to go Fast.',
+          ]);
         }
       }
 
@@ -1337,6 +1418,14 @@ TurbulenzEngine.onload = function onloadFn()
       default_font.drawSized(null, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
     }
 
+    // bar under bottom UI
+    let bar_h = BUTTON_H + 8;
+    draw_list.queue(sprites.white, configureParams.viewportRectangle[0], UI_BOTTOM - bar_h, 1.75, [0, 0, 0, 0.5],
+      [configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0], bar_h, 1, 1]);
+
+
+    doPanning();
+
     if (play_state === 'preview') {
       let pos;
       if ((pos = input.clickHit(-Infinity, -Infinity, Infinity, Infinity))) {
@@ -1344,15 +1433,16 @@ TurbulenzEngine.onload = function onloadFn()
       }
     }
 
-    draw_list.queue(sprites.background, -TILE_SIZE * 20, -TILE_SIZE * 20, 1, [1, 1, 1, 1]);
+    draw_list.queue(sprites.background, -TILE_SIZE * 20 + view_offset[0], -TILE_SIZE * 20 + view_offset[1], 1, [1, 1, 1, 1]);
     // darken out of bounds, if visible
-    draw_list.queue(sprites.white, -TILE_SIZE * 20, -TILE_SIZE * 20, 1.5, [0, 0, 0, 0.5],
+    let darken_color = [0, 0, 0, 0.25];
+    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], -TILE_SIZE * 20 + view_offset[1], 1.5, darken_color,
       [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
-    draw_list.queue(sprites.white, -TILE_SIZE * 20, dd.map[0].length * TILE_SIZE, 1.5, [0, 0, 0, 0.5],
-      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
-    draw_list.queue(sprites.white, -TILE_SIZE * 20, 0, 1.5, [0, 0, 0, 0.5],
+    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], dd.map[0].length * TILE_SIZE + view_offset[1], 1.5, darken_color,
+      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20 + view_offset[1], 1, 1]);
+    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
-    draw_list.queue(sprites.white, dd.map.length * TILE_SIZE, 0, 1.5, [0, 0, 0, 0.5],
+    draw_list.queue(sprites.white, dd.map.length * TILE_SIZE + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     if (DEBUG) {
       // darken out-of-aspect
@@ -1371,9 +1461,9 @@ TurbulenzEngine.onload = function onloadFn()
       eff_current_tile = 'sell';
     }
     for (let ii = 0; ii < dd.map.length; ++ii) {
-      let x = ii * TILE_SIZE;
+      let x = ii * TILE_SIZE + view_offset[0];
       for (let jj = 0; jj < dd.map[ii].length; ++jj) {
-        let y = jj * TILE_SIZE;
+        let y = jj * TILE_SIZE + view_offset[1];
         let tile = dd.map[ii][jj];
         if (tile && tile.nodraw) {
           continue;
@@ -1673,7 +1763,7 @@ TurbulenzEngine.onload = function onloadFn()
           color: fl.style.color & 0xFFFFFF00 | a,
           outline_color: fl.style.outline_color & 0xFFFFFF00 | a,
         });
-        default_font.drawSized(style, fl.x, y, fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
+        default_font.drawSized(style, fl.x + (fl.is_ui ? 0 : view_offset[0]), y + (fl.is_ui ? 0 : view_offset[1]), fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
       }
     }
   }

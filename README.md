@@ -2,13 +2,14 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Next steps:
-* scrolling, bigger map?  at least need to get out from under the panel!
 * goal
 * sounds
 * art polish:
   * base, crafting - look more unique/obvious?
-  * display money on center of base?
   * resources
+  * background slightly more interesting
+  * display money on center of base?
+  * brighter colors?
 
 Build:
 * transfer
@@ -16,11 +17,17 @@ Build:
 
 Balance so far:
   Earliest crafting I was able to do was turn 10 (not enough power upgrades)
-    Maybe power upgrade gives +2 power?
+    Maybe power upgrade gives +2 power?  Probably not exponential, but linear?
     Maybe crafted stuff should be much more valuable?
 
+Levels:
+  Tutorial Level:
+    turn 1: one guy to walk and pick something up
+    turn 2: add another guy who walks back and forth
+    turn 3: remove everything, do simple crafting, win level
+
+
 UI:
-* scrolling!  bigger maps
 * mousewheel to change direction
 * in preview: pause, rewind, etc
 * tooltips on resources, show immediate recipes
@@ -92,3 +99,7 @@ Generated nodes:
 * obstacles?
   * blocking obstacles - drones just stop
   * death obstacles - drones fall in, die, generate negative income
+
+
+Engine tweaks:
+  * Move view_origin into a camera module, have input and draw_list respect it
