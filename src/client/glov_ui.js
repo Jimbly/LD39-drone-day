@@ -104,11 +104,16 @@ class GlovUI {
   buttonShared(x, y, w, h) {
     let color = this.color_white;
     let ret = false;
+    this.button_mouseover = false;
     if (this.glov_input.clickHit(x, y, w, h)) {
+      this.button_mouseover = true;
       color = this.color_click;
       ret = true;
     } else if (this.glov_input.isMouseOver(x, y, w, h)) {
+      this.button_mouseover = true;
       color = this.glov_input.isMouseDown() ? this.color_click : this.color_rollover;
+    } else {
+      this.button_mouseover = false;
     }
     return {ret, color};
   }

@@ -3,12 +3,25 @@ LD39 - Running out of Power - Drone Supervisor
 
 Next steps:
 * scrolling, bigger map?  at least need to get out from under the panel!
-* tooltips on tools
 * goal
+* sounds
+* art polish:
+  * base, crafting - look more unique/obvious?
+  * display money on center of base?
+  * resources
+
+Build:
+* transfer
+* rotate (as two more "directions" on arrows?)
+
+Balance so far:
+  Earliest crafting I was able to do was turn 10 (not enough power upgrades)
+    Maybe power upgrade gives +2 power?
+    Maybe crafted stuff should be much more valuable?
 
 UI:
 * scrolling!  bigger maps
-* right click to delete, maybe mousewheel to change direction
+* mousewheel to change direction
 * in preview: pause, rewind, etc
 * tooltips on resources, show immediate recipes
   * same when running with resources being carried

@@ -15,7 +15,7 @@ class GlovInput {
     this.mouse_y = 0;
     this.mouse_mapped = [0,0];
     this.mouse_over_captured = false;
-    this.mouse_down = false;
+    this.mouse_down = [];
     this.pad_threshold = 0.25;
     this.touch_state = [];
 
@@ -67,12 +67,13 @@ class GlovInput {
 
   onMouseDown(mousecode, x, y) {
     this.onMouseOver(x, y); // update this.mouse_mapped
-    this.mouse_down = true;
+    this.mouse_down[mousecode] = true;
   }
   onMouseUp(mousecode, x, y) {
     this.onMouseOver(x, y); // update this.mouse_mapped
-    this.clicks.push(this.mouse_mapped.slice(0));
-    this.mouse_down = false;
+    this.clicks[mousecode] = this.clicks[mousecode] || [];
+    this.clicks[mousecode].push(this.mouse_mapped.slice(0));
+    this.mouse_down[mousecode] = false;
   }
   onMouseOver(x, y) {
     this.mouse_x = x;
@@ -97,17 +98,22 @@ class GlovInput {
     const origin = sprite.getOrigin();
     return this.isMouseOver(sprite.x - origin[0], sprite.y - origin[1], w, h);
   }
-  isMouseDown() {
-    return this.mouse_down;
+  isMouseDown(button) {
+    button = button || 0;
+    return this.mouse_down[button];
   }
   mousePos() {
     return [this.mouse_mapped[0], this.mouse_mapped[1]];
   }
-  clickHit(x, y, w, h) {
-    for (var ii = 0; ii < this.last_clicks.length; ++ii) {
-      var pos = this.last_clicks[ii];
+  clickHit(x, y, w, h, button) {
+    button = button || 0;
+    if (!this.last_clicks[button]) {
+      return false;
+    }
+    for (var ii = 0; ii < this.last_clicks[button].length; ++ii) {
+      var pos = this.last_clicks[button][ii];
       if (pos[0] >= x && (w === Infinity || pos[0] < x + w) && pos[1] >= y && (h === Infinity || pos[1] < y + h)) {
-        this.last_clicks.splice(ii, 1);
+        this.last_clicks[button].splice(ii, 1);
         return true;
       }
     }
