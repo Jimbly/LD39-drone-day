@@ -1,5 +1,5 @@
-LD39 - Running out of Power
-============================
+LD39 - Running out of Power - Drone Supervisor
+==============================================
 
 Next steps:
 * crafting stations / advanced resources
@@ -7,7 +7,9 @@ Next steps:
 * upgrades
 
 UI:
-* right click or shift click to delete, maybe mousewheel to change direction
+* scrolling!  bigger maps
+* right click to delete, maybe mousewheel to change direction
+* pause, rewind, etc
 
 Level:
   * (Random?) resource distribution

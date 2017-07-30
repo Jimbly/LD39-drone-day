@@ -117,11 +117,13 @@ TurbulenzEngine.onload = function onloadFn()
 
     let spriteSize = 13;
     let background_tile = 100;
-    function buildRects(w, h) {
+    function buildRects(w, h, sx, sy) {
+      sx = sx || 1;
+      sy = sy || 1;
       let rects = [];
       for (let jj = 0; jj < h; ++jj) {
         for (let ii = 0; ii < w; ++ii) {
-          let r = mathDevice.v4Build(ii * spriteSize, jj * spriteSize, (ii + 1) * spriteSize, (jj + 1) * spriteSize);
+          let r = mathDevice.v4Build(ii * spriteSize * sx, jj * spriteSize * sy, (ii + 1) * spriteSize * sx, (jj + 1) * spriteSize * sy);
           rects.push(r);
         }
       }
@@ -134,46 +136,23 @@ TurbulenzEngine.onload = function onloadFn()
       textureRectangle : mathDevice.v4Build(0, 0, spriteSize * 4 * background_tile, spriteSize * 4 * background_tile),
       origin: [0,0],
     });
-    sprites.drone = createSprite('drone.png', {
-      width : TILE_SIZE,
-      height : TILE_SIZE,
-      rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
-      origin: [0,0],
-    });
-    sprites.drone.rects = buildRects(2,2);
-    sprites.arrow = createSprite('arrows.png', {
-      width : TILE_SIZE,
-      height : TILE_SIZE,
-      rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
-      origin: [0,0],
-    });
-    sprites.arrow.rects = buildRects(2,2);
-    sprites.resource = createSprite('resources.png', {
-      width : TILE_SIZE,
-      height : TILE_SIZE,
-      rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
-      origin: [0,0],
-    });
-    sprites.resource.rects = buildRects(2,2);
-    sprites.sell = createSprite('sell.png', {
-      width : TILE_SIZE,
-      height : TILE_SIZE,
-      rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize),
-      origin: [0,0],
-    });
-    sprites.sell.rects = buildRects(1,1);
-
-    sprites.base = createSprite('base.png', {
-      width : TILE_SIZE * BASE_SIZE,
-      height : TILE_SIZE * BASE_SIZE,
-      rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize * BASE_SIZE, spriteSize * BASE_SIZE),
-      origin: [0,0],
-    });
+    function loadSprite(name, tx, ty, sx, sy) {
+      sprites[name] = createSprite(name + '.png', {
+        width : TILE_SIZE * (sx || 1),
+        height : TILE_SIZE * (sy || 1),
+        rotation : 0,
+        textureRectangle : mathDevice.v4Build(0, 0, spriteSize * (sx || 1), spriteSize * (sy || 1)),
+        origin: [0,0],
+      });
+      sprites[name].rects = buildRects(tx,ty, sx, sy);
+    }
+    loadSprite('drone', 2, 2);
+    loadSprite('arrow', 2, 2);
+    loadSprite('resource', 2, 3);
+    loadSprite('sell', 1, 1);
+    loadSprite('base', 1, 1, BASE_SIZE, BASE_SIZE);
+    loadSprite('craft2', 2, 2, 2, 2);
+    loadSprite('craft3', 2, 2, 3, 3);
 
     sprites.panel = glov_ui.loadSpriteRect('panel.png', [2, 12, 2], [2, 12, 2]);
   }
@@ -230,43 +209,98 @@ TurbulenzEngine.onload = function onloadFn()
   const ticked_types = { 'resource': true, 'base': true };
   const dx = [0, 1, 0, -1];
   const dy = [-1, 0, 1, 0];
+  let VALC = 10;
+  let VALS = 12;
+  let VALG = 15;
+  let VALD = 100;
   const resource_types = [
     {
+      name: 'copper',
       tile: 0,
       min: 4,
       max: 4,
       quantity: 4,
-      value: 10,
+      value: VALC,
     },
     {
-      //type: 'res_b',
+      type: 'silver',
       tile: 1,
       min: 3,
       max: 3,
       quantity: 3,
-      value: 12,
+      value: VALS,
     },
     {
-      //type: 'res_c',
+      type: 'gold',
       tile: 2,
       min: 2,
       max: 2,
       quantity: 2,
-      value: 15,
+      value: VALG,
     },
     {
-      //type: 'res_d',
+      type: 'diamond',
       tile: 3,
       min: 1,
       max: 1,
       quantity: 1,
-      value: 100,
+      value: VALD,
     },
   ];
+  let VALCRAFT2 = 10;
+  let VALCRAFT3 = 20;
+  let VALSEQUENTIAL2 = 5;
+  let VALSEQUENTIAL3 = 10;
+  let VAL_electrum, VAL_green_gold;
+  const recipes = [
+    // tile, type, value, src1, src2, ...
+    [5, 'sterling', VALC + VALS + VALCRAFT2 + VALSEQUENTIAL2,  'copper', 'silver'],
+    [5, 'rose gold', VALC + VALG + VALCRAFT2, 'copper', 'gold'],
+    [4, 'copper bracelet', VALC + VALC + VALCRAFT2, 'copper', null], // copper/copper
+    [4, 'copper bracelet', VALC + VALC + VALC + VALCRAFT3, 'copper', null, null],
+    [5, 'jewelry', VALS + VALG + VALCRAFT2 + VALSEQUENTIAL2, 'silver', 'gold'],
+    [5, 'silver bracelet', VALS + VALC + VALCRAFT2, 'silver', null], // silver/gold, silver/silver
+    [5, 'silver bracelet', VALS + VALC + VALC + VALCRAFT3, 'silver', null, null],
+    [5, 'gold bracelet', VALG + VALC + VALCRAFT2, 'gold', null],
+    [5, 'gold bracelet', VALG + VALC + VALC + VALCRAFT3, 'gold', null, null],
+    [5, 'electrum', (VAL_electrum = VALC + VALS + VALG + VALCRAFT3 + VALSEQUENTIAL3), 'copper', 'silver', 'gold'],
+    [5, 'green gold', (VAL_green_gold = VALS + VALG + VALG + VALCRAFT3), 'silver', 'gold', 'gold'],
+    [5, 'masterpiece', VAL_electrum + VAL_green_gold + VALCRAFT2 + VALSEQUENTIAL2, 'electrum', 'green gold'],
+    [4, 'junk', VALC + VALC, null, null],
+    [4, 'junk', VALC + VALC + VALC, null, null, null],
+    // todo: diamonds
+  ];
+  function findResourceType(type) {
+    for (let jj = 0; jj < resource_types.length; ++jj) {
+      if (resource_types[jj].type === type) {
+        return jj;
+      }
+    }
+    return null;
+  }
+  for (let ii = 0; ii < recipes.length; ++ii) {
+    let line = recipes[ii];
+    let type = line[1];
+    if (findResourceType(ii) === null) {
+      resource_types.push({
+        type,
+        tile: line[0],
+        value: line[2],
+        min: 0, max: 0, quanity: 0,
+      });
+    }
+  }
   const cost_table = {
     'drone': [200, 100],
     'arrow': [20, 10],
+    'craft2': [1000, 500],
+    'craft3': [3000, 1000],
   };
+  const tile_type_size = {
+    'craft2': 2,
+    'craft3': 3,
+  };
+
   function resourceValue(res) {
     return resource_types[res].value;
   }
@@ -336,6 +370,21 @@ TurbulenzEngine.onload = function onloadFn()
       dd.money += dd.dmoney;
     }
 
+    canPlaceTile(x, y, tile_type) {
+      let size = tile_type_size[tile_type] || 1;
+      if (x < 0 || y < 0 || x + size >= this.map.length || y + size >= this.map[0].length) {
+        return false;
+      }
+      for (let ii = 0; ii < size; ++ii) {
+        for (let jj = 0; jj < size; ++jj) {
+          if (this.map[x + ii][y + jj]) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
     countOf(tile_type) {
       let r = 0;
       for (let ii = 0; ii < this.map.length; ++ii) {
@@ -355,9 +404,15 @@ TurbulenzEngine.onload = function onloadFn()
       if (!tile_type) {
         // selling
         if (tile) {
+          assert(!tile.nodraw);
           let old_type = tile.type;
           let cost_calc = cost_table[old_type];
-          this.map[x][y] = null;
+          let size = tile_type_size[old_type] || 1;
+          for (let ii = 0; ii < size; ++ii) {
+            for (let jj = 0; jj < size; ++jj) {
+              this.map[x + ii][y + jj] = null;
+            }
+          }
           dmoney = cost_calc[0] + cost_calc[1] * this.countOf(old_type);
         }
       } else {
@@ -371,11 +426,17 @@ TurbulenzEngine.onload = function onloadFn()
             floatText(x*TILE_SIZE, y*TILE_SIZE, Z_FLOAT, `Cannot afford ${-dmoney}`, font_style_buy);
             dmoney = 0;
           } else {
-            // buy new tile
-            tile = this.map[x][y] = {
-              type: tile_type,
-              direction: dir,
-            };
+            // place new tile(s)
+            let size = tile_type_size[tile_type] || 1;
+            for (let ii = 0; ii < size; ++ii) {
+              for (let jj = 0; jj < size; ++jj) {
+                tile = this.map[x + ii][y + jj] = {
+                  type: tile_type,
+                  direction: dir,
+                  nodraw: ii !== 0 || jj !== 0,
+                };
+              }
+            }
           }
         }
       }
@@ -667,7 +728,7 @@ TurbulenzEngine.onload = function onloadFn()
       // dd.buyTile(4, 10, 'drone', 2);
       // dd.buyTile(4, 12, 'drone', 0);
 
-      previewStart();
+      // previewStart();
 
     }
 
@@ -729,6 +790,14 @@ TurbulenzEngine.onload = function onloadFn()
       display_name: 'Turn',
     },
     {
+      type: 'craft2',
+      display_name: '2-Node Crafting Station',
+    },
+    {
+      type: 'craft3',
+      display_name: '3-Node Crafting Station',
+    },
+    {
       type: 'sell',
       display_name: 'Sell',
     },
@@ -773,7 +842,7 @@ TurbulenzEngine.onload = function onloadFn()
         'Build tools:');
       y += font_size + pad;
 
-      let tools_w = 1;
+      let tools_w = 2;
       let bx = x;
       for (let ii = 0; ii < store.length; ++ii) {
         let tile = 2;
@@ -871,13 +940,17 @@ TurbulenzEngine.onload = function onloadFn()
       for (let jj = 0; jj < dd.map[ii].length; ++jj) {
         let y = jj * TILE_SIZE;
         let tile = dd.map[ii][jj];
+        if (tile && tile.nodraw) {
+          continue;
+        }
+        let tile_size = tile && tile_type_size[tile.type] || 1;
         let do_draw = true;
         if (play_state === 'build') {
           if (eff_current_tile === 'sell') {
             if (tile && (tile.type === 'base' || tile.type === 'resource')) {
               // not sellable
             } else {
-              if (tile && input.clickHit(x, y, TILE_SIZE, TILE_SIZE)) {
+              if (tile && input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 dd.buyTile(ii, jj, null);
               } else if (input.isMouseOver(x, y, TILE_SIZE, TILE_SIZE)) {
                 if (!tile) {
@@ -888,13 +961,15 @@ TurbulenzEngine.onload = function onloadFn()
               }
             }
           } else {
-            if (!tile || tile.type === current_tile) {
-              if (input.clickHit(x, y, TILE_SIZE, TILE_SIZE)) {
+            if (dd.canPlaceTile(ii, jj, current_tile) || tile && tile.type === current_tile) {
+              if (input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 dd.buyTile(ii, jj, current_tile, current_direction);
                 if (tile && tile.type === current_tile) {
                   current_direction = tile.direction;
                 }
-              } else if (input.isMouseOver(x, y, TILE_SIZE, TILE_SIZE)) {
+                do_draw = false;
+                drawTile(current_tile, current_direction, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
+              } else if (input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 let dir = current_direction;
                 if (tile && tile.type === current_tile) {
                   do_draw = false;

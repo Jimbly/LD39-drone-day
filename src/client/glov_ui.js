@@ -124,7 +124,14 @@ class GlovUI {
     let shared = this.buttonShared(x, y, w, h);
 
     this.drawHBox(this.sprites.button, x, y, z, w, h, shared.color);
-    this.draw_list.queue(img, x + (w - img.getWidth()) / 2, y + (h - img.getHeight()) / 2, z + 0.1, shared.color, null, img_rect);
+    let img_w = img.getWidth();
+    let img_h = img.getHeight();
+    let img_scale = 1;
+    img_scale = Math.min(img_scale, (w * 0.75) / img_w);
+    img_scale = Math.min(img_scale, (h * 0.75) / img_h);
+    img_w *= img_scale;
+    img_h *= img_scale;
+    this.draw_list.queue(img, x + (w - img_w) / 2, y + (h - img_h) / 2, z + 0.1, shared.color, [img_scale, img_scale, 1, 1], img_rect);
     return shared.ret;
   }
 
