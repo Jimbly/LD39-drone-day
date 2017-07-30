@@ -636,19 +636,19 @@ TurbulenzEngine.onload = function onloadFn()
     [5, 'rose gold', VALC + VALG + VALCRAFT2, 'copper', 'gold'],
     [0, 'pure copper', VALC + VALC + VALCRAFT2, 'copper', 'copper'], // no significant bonus
     [4, 'copper bracelet', VALC + VALC + VALCRAFT2, 'copper', null], // copper/copper
-    [4, 'copper bracelet', VALC + VALC + VALC + VALCRAFT3, 'copper', null, null],
+    [4, 'copper necklace', VALC + VALC + VALC + VALCRAFT3, 'copper', null, null],
     [5, 'jewelry', VALS + VALG + VALCRAFT2 + VALSEQUENTIAL2, 'silver', 'gold'],
     [1, 'pure silver', VALS + VALS + VALCRAFT2 + VALSAME2, 'silver', 'silver'],
     [5, 'silver bracelet', VALS + VALC + VALCRAFT2, 'silver', null],
-    [5, 'silver bracelet', VALS + VALC + VALC + VALCRAFT3, 'silver', null, null],
+    [5, 'silver necklace', VALS + VALC + VALC + VALCRAFT3, 'silver', null, null],
     [2, 'pure gold', VALG + VALG + VALCRAFT2 + VALSAME2, 'gold', 'gold'],
     [5, 'gold bracelet', VALG + VALC + VALCRAFT2, 'gold', null],
-    [5, 'gold bracelet', VALG + VALC + VALC + VALCRAFT3, 'gold', null, null],
+    [5, 'gold necklace', VALG + VALC + VALC + VALCRAFT3, 'gold', null, null],
     [5, 'electrum', (VAL_electrum = VALC + VALS + VALG + VALCRAFT3 + VALSEQUENTIAL3), 'copper', 'silver', 'gold'],
     [5, 'green gold', (VAL_green_gold = VALS + VALG + VALG + VALCRAFT3), 'silver', 'gold', 'gold'],
     [5, 'masterpiece', VAL_electrum + VAL_green_gold + VALCRAFT2 + VALSEQUENTIAL2, 'electrum', 'green gold'],
     [4, 'junk', VALC + VALC, null, null],
-    [4, 'junk', VALC + VALC + VALC, null, null, null],
+    [4, 'large junk', VALC + VALC + VALC, null, null, null],
     // todo: diamonds
   ];
   function findResourceType(type) {
@@ -1412,6 +1412,7 @@ TurbulenzEngine.onload = function onloadFn()
   let current_tile;
   let current_direction;
   let play_state;
+  let recipes_page = 0;
   let tick_time;
   let tick_countdown;
 
@@ -1425,7 +1426,7 @@ TurbulenzEngine.onload = function onloadFn()
     if (DEBUG) {
       dd.startLevel(level_defs[0]);
       dd.tutorial_state = 22;
-      play_state = 'build';
+      play_state = 'recipes';
     } else {
       play_state = 'menu';
     }
@@ -1589,6 +1590,12 @@ TurbulenzEngine.onload = function onloadFn()
     glov_ui.drawBox(sprites.panel, x, y, z, w, h, 80, [1,1,0.8,1]);
     input.clickHit(x, y, w, h);
     input.isMouseOver(x, y, w, h);
+  }
+
+  function drawResource(x, y, tile) {
+    let s = sprites.resource;
+    let tex_rect = s.rects[tile];
+    draw_list.queue(s, x, y, Z_UI, color_white, null, tex_rect);
   }
 
   const PANEL_W = 200;
@@ -1984,7 +1991,13 @@ TurbulenzEngine.onload = function onloadFn()
         'incomplete');
       y += SCORE_SIZE;
 
-      y += 8;
+      y += 16;
+      if (glov_ui.buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Recipes')) {
+        play_state = 'recipes';
+        recipes_page = 0;
+      }
+      y += BUTTON_H + 4;
+
       if (dd.map.length > 3) {
         if (glov_ui.buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Back')) {
           play_state = 'build';
@@ -1998,13 +2011,79 @@ TurbulenzEngine.onload = function onloadFn()
 
       draw_list.queue(sprites.white, configureParams.viewportRectangle[0], configureParams.viewportRectangle[1], Z_UI - 2, [0,0,0,0.9],
         [configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0], configureParams.viewportRectangle[3] - configureParams.viewportRectangle[1], 1, 1]);
+    } else if (play_state === 'recipes') {
+
+      let x = 0;
+      let w = game_width;
+      let y = 20;
+      const MENU_FONT_SIZE1 = 48;
+      default_font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
+        glov_font.ALIGN.HCENTER, w, 0,
+        'Recipes and Resources');
+      y += MENU_FONT_SIZE1;
+
+      const font_size = 32;
+      const line_size = 42;
+      let idx = 0;
+      let num_per_page = 18;
+      let idx0 = recipes_page * num_per_page;
+      let idx1 = (recipes_page + 1) * num_per_page;
+
+      for (let ii = 0; ii < resource_types.length; ++ii) {
+        let r = resource_types[ii];
+        if (!r || !r.quantity) {
+          continue;
+        }
+        if (idx >= idx0 && idx < idx1) {
+          drawResource(x, y, r.tile);
+          default_font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
+            `${r.type} (\$${r.value})`);
+          y += line_size;
+        }
+        idx++;
+      }
+      for (let ii = 0; ii < recipes.length; ++ii) {
+        let r = recipes[ii];
+        if (idx >= idx0 && idx < idx1) {
+          drawResource(x, y, r[0]);
+          default_font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
+            `${r[1]} (\$${r[2]})`);
+
+          let xx = x + 400;
+          let ingred = r.slice(3);
+          for (let ii = 0; ii < ingred.length; ++ii) {
+            default_font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, (ii === 0) ? '=' : '+');
+            xx += font_size * 2;
+            if (ingred[ii]) {
+              drawResource(xx, y, resource_types[findResourceType(ingred[ii])].tile);
+              xx += TILE_SIZE;
+            }
+            default_font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, ingred[ii] || '(anything)');
+            xx += 180;
+          }
+          y += line_size;
+        }
+        idx++;
+      }
+
+      if (recipes_page && glov_ui.buttonText(16 + (BUTTON_W + 4) * 1.5, game_height - BUTTON_H - 16, Z_UI, BUTTON_W, BUTTON_H, 'Prev Page')) {
+        recipes_page--;
+      }
+      if (((recipes_page + 1) * num_per_page <= idx) &&  glov_ui.buttonText(16 + (BUTTON_W + 4) * 2.5, game_height - BUTTON_H - 16, Z_UI, BUTTON_W, BUTTON_H, 'Next Page')) {
+        recipes_page++;
+      }
+
+      if (glov_ui.buttonText(16, game_height - BUTTON_H - 16, Z_UI, BUTTON_W, BUTTON_H, 'Back')) {
+        play_state = 'menu';
+      }
+      drawPanel(0, 0, Z_UI - 1, game_width, game_height);
     }
     if (status) {
       const STATUS_H = 32;
       default_font.drawSized(panel_font_style, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
     }
 
-    if (play_state !== 'menu') {
+    if (play_state !== 'menu' && play_state !== 'recipes') {
       // bar under bottom UI
       let bar_h = BUTTON_H + 16;
       drawPanel(configureParams.viewportRectangle[0] - 64, UI_BOTTOM - bar_h, 1.75,

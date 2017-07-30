@@ -2,12 +2,13 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Must:
-* show recipes
 * configure 3-5 levels
+* add free-play level option
 * sounds
 * art polish:
   * resources
 Want:
+* auto start tutorial if you have no saved scores
 * art polish:
   * base, crafting - look more unique/obvious?
   * background slightly more interesting
