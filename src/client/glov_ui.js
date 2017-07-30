@@ -87,13 +87,17 @@ class GlovUI {
     hs[1] = Math.max(0, h - hs[0] - hs[2]);
     for (let ii = 0; ii < ws.length; ++ii) {
       let my_w = ws[ii];
-      let y = y0;
-      for (let jj = 0; jj < hs.length; ++jj) {
-        let my_h = hs[jj];
-        this.draw_list.queue(s, x, y, z, color, [my_w, my_h, 1, 1], uidata.rects[jj * 3 + ii]);
-        y += my_h;
+      if (my_w) {
+        let y = y0;
+        for (let jj = 0; jj < hs.length; ++jj) {
+          let my_h = hs[jj];
+          if (my_h) {
+            this.draw_list.queue(s, x, y, z, color, [my_w, my_h, 1, 1], uidata.rects[jj * 3 + ii]);
+            y += my_h;
+          }
+        }
+        x += my_w;
       }
-      x += my_w;
     }
   }
 

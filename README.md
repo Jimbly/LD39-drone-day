@@ -2,14 +2,17 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Next steps:
-* crafting stations / advanced resources
-* maximum power
-* upgrades
+* animate resource movement
+* scrolling, bigger map?  at least need to get out from under the panel!
+* tooltips on tools
+* goal
 
 UI:
 * scrolling!  bigger maps
 * right click to delete, maybe mousewheel to change direction
-* pause, rewind, etc
+* in preview: pause, rewind, etc
+* tooltips on resources, show immediate recipes
+  * same when running with resources being carried
 
 Level:
   * (Random?) resource distribution

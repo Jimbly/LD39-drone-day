@@ -94,7 +94,7 @@
       window.assert = function(exp) {
         if (!exp) {
           console.log(new Error().stack);
-          //alert('assertion failed');
+          window.alert('assertion failed');
         }
       };
       // Embedded code and startup code.
