@@ -1,6 +1,8 @@
 Ludum Dare 39 - Running out of Power - Drone Supervisor
 ======================================================
 
+http://www.dashingstrike.com/LudumDare/LD39/
+
 Give orders to an army of drones in this turn-based production-line building simulation game!
 
 Just follow the tutorial and you should be good to go!
