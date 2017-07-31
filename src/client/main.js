@@ -23,6 +23,7 @@ TurbulenzEngine.onload = function onloadFn()
   const input = require('./input.js').create(inputDevice, draw2D);
   const draw_list = require('./draw_list.js').create(draw2D);
   const random_seed = require('random-seed');
+  const score = require('./score.js');
 
   const camera = Camera.create(mathDevice);
   const lookAtPosition = mathDevice.v3Build(0.0, 0.0, 0.0);
@@ -75,6 +76,66 @@ TurbulenzEngine.onload = function onloadFn()
   let sprites = {};
   let global_timer = 0;
   let game_state;
+
+  function updateScoresDisplay(level_name) {
+    let scores = score.high_scores[level_name];
+    let html = [];
+    if (scores) {
+      let last_unique = 0;
+      let last_unique_score = scores[0] ? score.formatScore(scores[0]) : '';
+      for (let ii = 0; ii < scores.length; ++ii) {
+        let high_score = scores[ii];
+        let name = score.formatName(high_score);
+        let score_disp = score.formatScore(high_score.score);
+        let me = high_score.name === score.player_name;
+        if (score_disp === last_unique_score) {
+          // same, no index update
+        } else{
+          last_unique_score = score_disp;
+          last_unique = ii;
+        }
+        html.push(`<div class="score${me ? ' me' : ''}">#${last_unique + 1}: ${score_disp} - ${name}</div>`);
+      }
+    }
+    $('#score_list').html(html.join('\n'));
+  }
+  let scores_viewing_level;
+  function viewScores() {
+    score.updateHighScores(level_defs, function () {
+      updateScoresDisplay(scores_viewing_level);
+    });
+    const BUTTON_H = 64;
+    const BUTTON_W = 320;
+    if (glov_ui.buttonText(configureParams.viewportRectangle[2] - BUTTON_W,
+      configureParams.viewportRectangle[3] - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Back')) {
+      game_state = playInit;
+    }
+  }
+  function viewScoresInit(level_name) {
+    scores_viewing_level = level_name;
+    game_state = viewScores;
+    $('#level_name').text(level_name);
+    updateScoresDisplay(level_name);
+    $('.screen').hide();
+    $('#scores').show();
+
+    if (!viewScoresInit.once) {
+      viewScoresInit.once = true;
+      if (score.player_name.indexOf('Anonymous') !== 0) {
+        $('#name').val(score.player_name);
+      }
+      $('#name').focus(function () {
+        inputDevice.onBlur();
+      });
+      $('#name').change(function (ev) {
+        score.updatePlayerName(level_defs, $('#name').val());
+      });
+      $('#name').blur(function () {
+        // submitScore();
+      });
+    }
+    $('#name').focus();
+  }
 
   function titleInit(dt) {
     $('.screen').hide();
@@ -580,6 +641,16 @@ TurbulenzEngine.onload = function onloadFn()
     outline_width: 1.0,
     outline_color: 0x000000ff,
   });
+  let font_style_hs_mine = glov_font.style(null, {
+    color: 0x008000ff,
+    outline_width: 1.0,
+    outline_color: 0xBBBBBBff,
+  });
+  let font_style_hs_other = glov_font.style(null, {
+    color: 0x404040ff,
+    outline_width: 1.0,
+    outline_color: 0xBBBBBBff,
+  });
 
 
   const actor_types = { 'drone': true };
@@ -817,25 +888,9 @@ TurbulenzEngine.onload = function onloadFn()
     goal: [],
     starting_money: 2000,
   };
-  function getScore(ld) {
-    let key = 'ld39.score_' + ld.name;
-    if (localStorage && localStorage[key]) {
-      return JSON.parse(localStorage[key]);
-    }
-    return null;
-  }
-  function setScore(ld, turns, net_worth) {
-    if (!ld.local_score || turns < ld.local_score.turns || turns === ld.local_score.turns && net_worth > ld.local_score.net_worth) {
-      // better
-      ld.local_score = { turns, net_worth };
-      if (localStorage) {
-        let key = 'ld39.score_' + ld.name;
-        localStorage[key] = JSON.stringify(ld.local_score);
-      }
-    }
-  }
+
   for (let ii = 0; ii < level_defs.length; ++ii) {
-    level_defs[ii].local_score = getScore(level_defs[ii]);
+    level_defs[ii].local_score = score.getScore(level_defs[ii]);
   }
 
   const POWER_STEP = 2;
@@ -1553,7 +1608,7 @@ TurbulenzEngine.onload = function onloadFn()
     dd.advanceEnd();
     play_state = 'build';
     if (dd.goal_reached) {
-      setScore(dd.ld, dd.turn, dd.netWorth());
+      score.setScore(dd.ld, dd.turn, dd.netWorth());
       play_state = 'menu';
     }
     dd.resetActors();
@@ -1974,7 +2029,8 @@ TurbulenzEngine.onload = function onloadFn()
 
       status = `Turn ${dd.turn + 1} Earnings: \$${dd.dmoney}`;
     } else if (play_state === 'menu') {
-      const MENU_W = 600;
+      score.updateHighScores(level_defs);
+      const MENU_W = 900;
       const MENU_X = (game_width - MENU_W) / 2;
       const MENU_Y = 100;
       const MENU_FONT_SIZE1 = 48;
@@ -1994,12 +2050,17 @@ TurbulenzEngine.onload = function onloadFn()
 
       y += 16;
 
-      const SCORE_X = x + MENU_W * 0.666;
+      const SCORE_W = 200;
+      const SCORE_X = x + 400;
+      const SCORE_HIGH_X = SCORE_X + SCORE_W;
+      const SCORE_HIGH_W = MENU_X + MENU_W - SCORE_HIGH_X - 16;
       const MENU_BUTTON_W = BUTTON_W;
       const LEVEL_X = SCORE_X - MENU_BUTTON_W - 16;
       const SCORE_SIZE = MENU_FONT_SIZE2;
       default_font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         'Score');
+      default_font.drawSized(panel_font_style, SCORE_HIGH_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+        'High Score');
       y += SCORE_SIZE;
       let score_total = { turns: 0, net_worth: 0 };
       let all_done = true;
@@ -2009,16 +2070,32 @@ TurbulenzEngine.onload = function onloadFn()
           dd.startLevel(ld);
           play_state = 'build';
         }
+
+        // Score
         default_font.drawAlignedSized(panel_font_style, SCORE_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
-          glov_font.ALIGN.HFIT, MENU_X + MENU_W - SCORE_X - 16, 0,
-          ld.local_score ?
-          `${ld.local_score.turns} turn${(ld.local_score.turns === 1) ? '' : 's'}, \$${ld.local_score.net_worth}` :
-          'incomplete');
+          glov_font.ALIGN.HFIT, SCORE_W - 16, 0,
+          ld.local_score ? score.formatScore(ld.local_score) : 'incomplete');
         if (ld.local_score) {
           score_total.turns += ld.local_score.turns;
           score_total.net_worth += ld.local_score.net_worth;
         } else {
           all_done = false;
+        }
+
+        // High score
+        let high_score = score.high_scores[ld.name];
+        high_score = high_score && high_score[0];
+        if (high_score) {
+          let mine = ld.local_score && high_score.score.turns === ld.local_score.turns && high_score.score.net_worth === ld.local_score.net_worth;
+          default_font.drawAlignedSized(mine ? font_style_hs_mine : font_style_hs_other,
+            SCORE_HIGH_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
+            glov_font.ALIGN.HFIT, SCORE_HIGH_W - 16, 0,
+            score.formatName(high_score) + ' ' + score.formatScore(high_score.score));
+        }
+
+        y += BUTTON_H - 8;
+        if (glov_ui.buttonText(SCORE_HIGH_X, y, Z_UI, SCORE_HIGH_W, BUTTON_H, 'View Scores')) {
+          viewScoresInit(ld.name);
         }
         y += BUTTON_H + 4;
       }
@@ -2026,7 +2103,7 @@ TurbulenzEngine.onload = function onloadFn()
         glov_font.ALIGN.HCENTER, MENU_BUTTON_W, 0, 'Total Score');
       default_font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         all_done ?
-        `${score_total.turns} turns, \$${score_total.net_worth}` :
+        score.formatScore(score_total) :
         'incomplete');
       y += SCORE_SIZE;
       y += 12;
@@ -2038,13 +2115,13 @@ TurbulenzEngine.onload = function onloadFn()
       }
 
       if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Medium)')) {
-        ld_rand_med.seed = Math.random()
+        ld_rand_med.seed = Math.random();
         dd.startLevel(ld_rand_med);
         play_state = 'build';
       }
       y += BUTTON_H + 4;
       if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Large)')) {
-        ld_rand_large.seed = Math.random()
+        ld_rand_large.seed = Math.random();
         dd.startLevel(ld_rand_large);
         play_state = 'build';
       }

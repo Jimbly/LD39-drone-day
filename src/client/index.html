@@ -20,9 +20,21 @@
       <div id="gamescreen" class="screenwrap">
         <div id="title" class="screen vflex" style="display: none;">
           <div class="flexcenter" style="text-align: center;">
-            <h1>Drone Day</h1>
+            <h1>Drone Supervisor</h1>
           </div>
           <div class="flexcenter" style="flex:3; text-align: center;"></div>
+        </div>
+        <div id="scores" class="screen vflex" style="display: none;">
+          <div class="flexcenter" style="text-align: center;">
+            <h1>Drone Supervisor</h1>
+            <h2>High Scores - <span id="level_name"></span></h2>
+          </div>
+          <div class="flexcenter" style="flex:3; text-align: center;">
+            <div id="score_list"></div>
+          </div>
+          <div class="flexcenter" style="text-align: center;">
+            <input type="text" name="name" id="name" placeholder="(enter name for score)" size="24" maxlength="24" autofocus="1" style="width: 90%;">
+          </div>
         </div>
       </div>
       <div id="fullscreen" class="screenwrap">

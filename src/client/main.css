@@ -42,6 +42,9 @@ canvas {
 #gamescreen,#fullscreen {
   pointer-events: none;
 }
+#scores {
+  pointer-events: auto;
+}
 
 .hflex {
   display: flex;
@@ -59,4 +62,8 @@ canvas {
 
 .flexcenter {
   align-self: center;
+}
+
+.score.me {
+  color: #8F8;
 }
