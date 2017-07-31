@@ -945,7 +945,7 @@ TurbulenzEngine.onload = function onloadFn()
 
     upgradeCost(type, delta) {
       assert(type === 'upgrade_power');
-      let steps = (dd.max_power - this.ld.starting_max_power) / POWER_STEP + delta;
+      let steps = (this.max_power - this.ld.starting_max_power) / POWER_STEP + delta;
       return steps * steps * 100;
     }
 
@@ -965,6 +965,10 @@ TurbulenzEngine.onload = function onloadFn()
             }
           }
         }
+      }
+      for (let ii = this.ld.starting_max_power; ii <= this.max_power; ii+=POWER_STEP) {
+        let steps = (ii - this.ld.starting_max_power) / POWER_STEP;
+        ret += steps * steps * 100;
       }
       return ret;
     }
