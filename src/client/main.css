@@ -42,7 +42,7 @@ canvas {
 #gamescreen,#fullscreen {
   pointer-events: none;
 }
-#scores {
+#name {
   pointer-events: auto;
 }
 
