@@ -7,7 +7,7 @@
 /*global VMath: false */
 /*global assert: false */
 
-const DEBUG = true;
+const DEBUG = false;
 
 TurbulenzEngine.onload = function onloadFn()
 {
@@ -483,7 +483,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
     loadSprite('drone', 2, 3);
     loadSprite('arrow', 2, 2);
-    loadSprite('resource', 2, 3);
+    loadSprite('resource', 4, 5);
     loadSprite('sell', 1, 1);
     loadSprite('green_arrow', 1, 1);
     loadSprite('upgrade_power', 1, 1);
@@ -623,30 +623,35 @@ TurbulenzEngine.onload = function onloadFn()
       value: VALD,
     },
   ];
-  let VALCRAFT2 = 50;
+  let VALCRAFT2 = 100;
   let VALCRAFT3 = 100;
-  let VALSAME2 = 20;
-  let VALSEQUENTIAL2 = 30;
-  let VALSAME3 = 50;
-  let VALSEQUENTIAL3 = 75;
-  let VAL_electrum, VAL_green_gold;
+  let VALSAME2 = 50;
+  let VALSEQUENTIAL2 = 80;
+  let VALSAME3 = 200;
+  let VALSEQUENTIAL3 = 300;
+  let VAL_electrum, VAL_green_gold, VAL_jewelry;
   const recipes = [
     // tile, type, value, src1, src2, ...
-    [5, 'sterling', VALC + VALS + VALCRAFT2 + VALSEQUENTIAL2,  'copper', 'silver'],
-    [5, 'rose gold', VALC + VALG + VALCRAFT2, 'copper', 'gold'],
-    [0, 'pure copper', VALC + VALC + VALCRAFT2, 'copper', 'copper'], // no significant bonus
-    [4, 'copper bracelet', VALC + VALC + VALCRAFT2, 'copper', null], // copper/copper
-    [4, 'copper necklace', VALC + VALC + VALC + VALCRAFT3, 'copper', null, null],
-    [5, 'jewelry', VALS + VALG + VALCRAFT2 + VALSEQUENTIAL2, 'silver', 'gold'],
+    [0, 'pure copper', VALC + VALC + VALCRAFT2 + VALSAME2, 'copper', 'copper'], // no significant bonus
     [1, 'pure silver', VALS + VALS + VALCRAFT2 + VALSAME2, 'silver', 'silver'],
-    [5, 'silver bracelet', VALS + VALC + VALCRAFT2, 'silver', null],
-    [5, 'silver necklace', VALS + VALC + VALC + VALCRAFT3, 'silver', null, null],
     [2, 'pure gold', VALG + VALG + VALCRAFT2 + VALSAME2, 'gold', 'gold'],
-    [5, 'gold bracelet', VALG + VALC + VALCRAFT2, 'gold', null],
-    [5, 'gold necklace', VALG + VALC + VALC + VALCRAFT3, 'gold', null, null],
-    [5, 'electrum', (VAL_electrum = VALC + VALS + VALG + VALCRAFT3 + VALSEQUENTIAL3), 'copper', 'silver', 'gold'],
-    [5, 'green gold', (VAL_green_gold = VALS + VALG + VALG + VALCRAFT3), 'silver', 'gold', 'gold'],
-    [5, 'masterpiece', VAL_electrum + VAL_green_gold + VALCRAFT2 + VALSEQUENTIAL2, 'electrum', 'green gold'],
+    [6, 'sterling', VALC + VALS + VALCRAFT2 + VALSEQUENTIAL2,  'copper', 'silver'],
+    [7, 'rose gold', VALC + VALG + VALCRAFT2, 'copper', 'gold'],
+    [8, 'jewelry', (VAL_jewelry = VALS + VALG + VALCRAFT2 + VALSEQUENTIAL2), 'silver', 'gold'],
+
+    [9, 'diamond ring', 2*(VALD + VAL_jewelry + VALCRAFT2 + VALSEQUENTIAL2), 'diamond', 'jewelry'],
+
+    [10, 'copper bracelet', VALC + VALC + VALCRAFT2, 'copper', null], // copper/copper
+    [11, 'copper necklace', VALC + VALC + VALC + VALCRAFT3, 'copper', null, null],
+    [12, 'silver bracelet', VALS + VALC + VALCRAFT2, 'silver', null],
+    [13, 'silver necklace', VALS + VALC + VALC + VALCRAFT3, 'silver', null, null],
+    [14, 'gold bracelet', VALG + VALC + VALCRAFT2, 'gold', null],
+    [15, 'gold necklace', VALG + VALC + VALC + VALCRAFT3, 'gold', null, null],
+
+    [16, 'electrum', (VAL_electrum = VALC + VALS + VALG + VALCRAFT3 + VALSEQUENTIAL3), 'copper', 'silver', 'gold'],
+    [17, 'green gold', (VAL_green_gold = VALS + VALG + VALG + VALCRAFT3), 'silver', 'gold', 'gold'],
+    [18, 'masterpiece', 2*(VAL_electrum + VAL_green_gold + VALCRAFT2 + VALSEQUENTIAL2), 'electrum', 'green gold'],
+
     [4, 'junk', VALC + VALC, null, null],
     [4, 'large junk', VALC + VALC + VALC, null, null, null],
     // todo: diamonds
@@ -770,19 +775,48 @@ TurbulenzEngine.onload = function onloadFn()
     starting_money: 500,
   },
   {
-    name: 'Level 1', seed: 'droneday', w: 20, h: 14,
+    name: 'Level 1', seed: 'droneday4', w: 17, h: 15,
     starting_max_power: 6,
     resources: resources_default,
-    goal: ['net_worth', 1000],
+    goal: ['net_worth', 10000],
     starting_money: 600,
   },
   {
-    name: 'Level 2', seed: 'droneday', w: 21, h: 15,
-    starting_max_power: 6,
-    resources: resources_default,
-    goal: ['sell', 'masterpiece'],
-    starting_money: 1000,
+    name: 'Level 2', seed: 'droneday2', w: 25, h: 17,
+    starting_max_power: 8,
+    resources: {
+      copper: 6,
+      silver: 6,
+      gold: 4,
+      diamond: 2,
+    },
+    goal: ['sell', 'masterpiece'], // takes ~20k to build what sells this
+    starting_money: 2000,
   });
+  let ld_rand_med = {
+    name: 'Random (Medium)', seed: 'rand', w: 25, h: 17,
+    starting_max_power: 6,
+    resources: {
+      copper: 6,
+      silver: 6,
+      gold: 4,
+      diamond: 2,
+    },
+    goal: [],
+    starting_money: 2000,
+  };
+  let ld_rand_large = {
+    name: 'Random (Large)', seed: 'rand', w: 49, h: 33,
+    starting_max_power: 6,
+    resources: {
+      copper: 6*4,
+      silver: 6*4,
+      gold: 4*4,
+      diamond: 3,
+    },
+    goal: [],
+    starting_money: 2000,
+  };
   function getScore(ld) {
     let key = 'ld39.score_' + ld.name;
     if (localStorage && localStorage[key]) {
@@ -960,7 +994,7 @@ TurbulenzEngine.onload = function onloadFn()
       for (let ii = 0; ii < this.map.length; ++ii) {
         for (let jj = 0; jj < this.map[ii].length; ++jj) {
           let tile = this.map[ii][jj];
-          if (tile && tile.type === tile_type) {
+          if (tile && tile.type === tile_type && !tile.nodraw) {
             ++r;
           }
         }
@@ -1424,9 +1458,8 @@ TurbulenzEngine.onload = function onloadFn()
     dd = new DroneDayState();
     current_direction = 2;
     if (DEBUG) {
-      dd.startLevel(level_defs[0]);
-      dd.tutorial_state = 22;
-      play_state = 'recipes';
+      dd.startLevel(level_defs[2]);
+      play_state = 'build';
     } else {
       play_state = 'menu';
     }
@@ -1624,7 +1657,7 @@ TurbulenzEngine.onload = function onloadFn()
   let panning_lastpos = null;
   let panning_start = null;
   function doPanning() {
-    if (dd.ld.tut) {
+    if (!dd.ld || dd.ld.tut) {
       return;
     }
     let pan = input.isKeyDown(keyCodes.SPACE) || input.isMouseDown(0) || input.isMouseDown(1) || input.isMouseDown(2);
@@ -1663,6 +1696,7 @@ TurbulenzEngine.onload = function onloadFn()
   let money_x, money_y;
   let sell_clicks = 0;
   let show_recipes = false;
+  let auto_started_tut = false;
   function play(dt) {
     indicator_pos.next_turn = null;
     const BUTTON_H = 64;
@@ -1716,11 +1750,12 @@ TurbulenzEngine.onload = function onloadFn()
       if (dd.ld.goal[0] === 'sell') {
         default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
           glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Craft and Sell 1 ${dd.ld.goal[1]}`);
-      } else {
+        top_y += TOP_FONT_SIZE;
+      } else if (dd.ld.goal[0] === 'net_worth') {
         default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
           glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Net Worth of \$${dd.ld.goal[1]}`);
+        top_y += TOP_FONT_SIZE;
       }
-      top_y += TOP_FONT_SIZE;
       default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE * 0.8, TOP_FONT_SIZE * 0.8,
         glov_font.ALIGN.HCENTER, TOP_W, 0,
         `Current Net Worth: \$${dd.netWorth()}`);
@@ -1990,6 +2025,27 @@ TurbulenzEngine.onload = function onloadFn()
         `${score_total.turns} turns, \$${score_total.net_worth}` :
         'incomplete');
       y += SCORE_SIZE;
+      y += 12;
+
+      if (!DEBUG && !score_total.turns && !auto_started_tut) {
+        auto_started_tut = true;
+        dd.startLevel(level_defs[0]);
+        play_state = 'build';
+      }
+
+      if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Medium)')) {
+        ld_rand_med.seed = Math.random()
+        dd.startLevel(ld_rand_med);
+        play_state = 'build';
+      }
+      y += BUTTON_H + 4;
+      if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Large)')) {
+        ld_rand_large.seed = Math.random()
+        dd.startLevel(ld_rand_large);
+        play_state = 'build';
+      }
+      y += BUTTON_H + 4;
+
 
       y += 16;
       if (glov_ui.buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Recipes')) {
@@ -2086,7 +2142,7 @@ TurbulenzEngine.onload = function onloadFn()
     if (play_state !== 'menu' && play_state !== 'recipes') {
       // bar under bottom UI
       let bar_h = BUTTON_H + 16;
-      drawPanel(configureParams.viewportRectangle[0] - 64, UI_BOTTOM - bar_h, 1.75,
+      drawPanel(configureParams.viewportRectangle[0] - 64, UI_BOTTOM - bar_h, Z_UI - 2,
         configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0] + 128, bar_h + 64);
 
       let tut_state = tutorial_states[dd.tutorial_state];

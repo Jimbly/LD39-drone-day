@@ -2,11 +2,7 @@ LD39 - Running out of Power - Drone Supervisor
 ==============================================
 
 Must:
-* configure 3-5 levels
-* add free-play level option
 * sounds
-* art polish:
-  * resources
 Want:
 * auto start tutorial if you have no saved scores
 * art polish:
