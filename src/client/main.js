@@ -1510,6 +1510,7 @@ TurbulenzEngine.onload = function onloadFn()
   let tick_countdown;
 
   function playInit(dt) {
+    $('#canvas').focus();
     initGraphics();
     $('.screen').hide();
     $('#play').show();
