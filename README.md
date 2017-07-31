@@ -1,5 +1,22 @@
-LD39 - Running out of Power - Drone Supervisor
-==============================================
+Ludum Dare 39 - Running out of Power - Drone Supervisor
+======================================================
+
+Give orders to an army of drones in this turn-based production-line building simulation game!
+
+Just follow the tutorial and you should be good to go!
+
+Things you might not get from the tutorial (come back and read this after playing the tutorial, perhaps):
+* On later levels, can pan the level by clicking and dragging, or holding the space bar
+* Resource generators generate a specific quantity of resources (e.g. copper generates 4), and you can harvest from them multiple times
+
+--
+_Spry Fox_'s _Leap Day_ (no longer available, sadly) was a big inspiration for this.
+
+Near the end, I decided that adding a tutorial was more useful than adding sounds and another polish pass, so, sadly, this game has no sound :(.  Hope the tutorial helps you get into the game!
+
+
+Development notes
+=================
 
 TODO:
 * sounds
