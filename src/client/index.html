@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>Drone Supervisor - Ludum Dare 39</title>
-
+    <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1">
     <script src="vendor/jquery-1.11.3.min.js"></script>
 
     <link rel="stylesheet" type="text/css" href="main.css">
@@ -122,9 +122,15 @@
         canvas.focus();
 
         function resizeCanvas() {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-          canvas.focus();
+          let css_to_real = window.devicePixelRatio || 1;
+
+          canvas.width = Math.floor(canvas.clientWidth * css_to_real);
+          canvas.height = Math.floor(canvas.clientHeight * css_to_real);
+
+          // This used to be here, but it breaks mobile devices!
+          // Might be needed to get gamepad input though?
+          //canvas.focus();
+
           // may force trigger immediate draw too?
           window.need_repos = 10;
         }

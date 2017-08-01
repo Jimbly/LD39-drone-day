@@ -16,6 +16,12 @@ _Spry Fox_'s _Leap Day_ (no longer available, sadly) was a big inspiration for t
 
 Near the end, I decided that adding a tutorial was more useful than adding sounds and another polish pass, so, sadly, this game has no sound :(.  Hope the tutorial helps you get into the game!
 
+Feedback / Improvements
+=======================
+* Need way to reset to state at beginning of turn
+* Output from 2-node crafting should prefer the side which does not also have an
+input, so one drone can be moving output to input and another can swipe the final
+output
 
 Development notes
 =================
