@@ -16,7 +16,9 @@ class GlovInput {
     this.mouse_over_captured = false;
     this.mouse_down = [];
     this.pad_threshold = 0.25;
+    this.last_touch_state = [];
     this.touch_state = [];
+    this.touch_as_mouse = true;
 
     this.padCodes = input_device.padCodes;
     this.padCodes.ANALOG_UP = 20;
@@ -127,7 +129,24 @@ class GlovInput {
   }
 
   onTouchChange(param) {
+    this.last_touch_state = this.touch_state;
     this.touch_state = param.touches || [];
+    if (this.touch_as_mouse) {
+      if (this.last_touch_state.length === 1 && this.touch_state.length === 0) {
+        // click!
+        this.mouse_down[0] = false;
+        // update this.mouse_mapped
+        this.onMouseOver(this.last_touch_state[0].positionX, this.last_touch_state[0].positionY);
+        this.clicks[0] = this.clicks[0] || [];
+        this.clicks[0].push(this.mouse_mapped.slice(0));
+      } else if (this.touch_state.length === 1) {
+        this.mouse_down[0] = true;
+        this.onMouseOver(this.touch_state[0].positionX, this.touch_state[0].positionY);
+      } else if (this.touch_state.length > 1) {
+        this.mouse_down[0] = false;
+        // no click
+      }
+    }
     //throw JSON.stringify(param, undefined, 2);
   }
   isTouchDown(x, y, w, h) {
