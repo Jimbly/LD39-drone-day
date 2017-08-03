@@ -2281,7 +2281,7 @@ TurbulenzEngine.onload = function onloadFn()
     draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], -TILE_SIZE * 20 + view_offset[1], 1.5, darken_color,
       [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
     draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], dd.map[0].length * TILE_SIZE + view_offset[1], 1.5, darken_color,
-      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20 + view_offset[1], 1, 1]);
+      [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
     draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     draw_list.queue(sprites.white, dd.map.length * TILE_SIZE + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
