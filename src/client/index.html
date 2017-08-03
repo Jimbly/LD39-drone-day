@@ -122,7 +122,7 @@
         canvas.focus();
 
         function resizeCanvas() {
-          let css_to_real = window.devicePixelRatio || 1;
+          var css_to_real = window.devicePixelRatio || 1;
 
           canvas.width = Math.floor(canvas.clientWidth * css_to_real);
           canvas.height = Math.floor(canvas.clientHeight * css_to_real);
