@@ -24,6 +24,8 @@ TurbulenzEngine.onload = function onloadFn()
   const random_seed = require('random-seed');
   const score = require('./score.js');
 
+  draw_list.setDefaultBucket('alpha_nearest');
+
   const sound_manager = require('./glov/sound_manager.js').create();
   sound_manager.loadSound('test');
 

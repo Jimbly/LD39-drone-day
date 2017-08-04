@@ -18,6 +18,12 @@ class GlovDrawList {
     this.draw_2d = draw_2d;
     this.camera = camera;
     this.list = [];
+    this.default_bucket = 'alpha';
+  }
+
+  // 'alpha_nearest' is useful
+  setDefaultBucket(new_value) {
+    this.default_bucket = new_value;
   }
 
   queue(sprite, x, y, z, color, scale, tex_rect, rotation, bucket) {
@@ -30,7 +36,7 @@ class GlovDrawList {
       color,
       scale: math_device.v4Build(scale[0] * this.camera.data[4], scale[1]*this.camera.data[5], 1,1),
       tex_rect,
-      bucket: bucket || 'alpha',
+      bucket: bucket || this.default_bucket,
       rotation: rotation || 0,
     };
     this.list.push(elem);
@@ -43,7 +49,7 @@ class GlovDrawList {
       x: (x - this.camera.data[0]) * this.camera.data[4],
       y: (y - this.camera.data[1]) * this.camera.data[5],
       z,
-      bucket: bucket || 'alpha',
+      bucket: bucket || this.default_bucket,
     };
     this.list.push(elem);
     return elem;
