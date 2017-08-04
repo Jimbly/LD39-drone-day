@@ -1817,7 +1817,7 @@ var Draw2D = (function () {
         o.drawRaw = undefined;
 
         // Load embedded default shader and techniques
-        let shader_def = {
+        var shader_def = {
             "version": 1,
             "name": "draw2D.cgfx",
             "samplers": {
