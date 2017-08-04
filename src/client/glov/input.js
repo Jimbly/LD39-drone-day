@@ -1,18 +1,19 @@
+/*global Draw2D: false */
 
 const UP_EDGE = 0;
 const DOWN_EDGE = 1;
 const DOWN = 2;
 
 class GlovInput {
-  constructor(input_device, draw2d) {
+  constructor(input_device, draw2d, camera) {
     this.input_device = input_device;
     this.draw2d = draw2d;
+    this.camera = camera;
     this.key_state = {};
     this.pad_states = []; // One map per joystick
     this.clicks = [];
-    this.mouse_x = 0;
-    this.mouse_y = 0;
-    this.mouse_mapped = [0,0];
+    this.mouse_pos = new Draw2D.floatArray(2);
+    this.mpos = new Draw2D.floatArray(2); // temporary, mapped to camera
     this.mouse_over_captured = false;
     this.mouse_down = [];
     this.pad_threshold = 0.25;
@@ -20,11 +21,12 @@ class GlovInput {
     this.touch_state = [];
     this.touch_as_mouse = true;
 
-    this.padCodes = input_device.padCodes;
-    this.padCodes.ANALOG_UP = 20;
-    this.padCodes.ANALOG_LEFT = 21;
-    this.padCodes.ANALOG_DOWN = 22;
-    this.padCodes.ANALOG_RIGHT = 23;
+    this.pad_codes = input_device.padCodes;
+    this.pad_codes.ANALOG_UP = 20;
+    this.pad_codes.ANALOG_LEFT = 21;
+    this.pad_codes.ANALOG_DOWN = 22;
+    this.pad_codes.ANALOG_RIGHT = 23;
+    this.key_codes = input_device.keyCodes;
 
     input_device.addEventListener('keydown', keycode => this.onKeyDown(keycode));
     input_device.addEventListener('keyup', keycode => this.onKeyUp(keycode));
@@ -69,63 +71,58 @@ class GlovInput {
   }
 
   onMouseDown(mousecode, x, y) {
-    this.onMouseOver(x, y); // update this.mouse_mapped
+    this.onMouseOver(x, y); // update this.mouse_pos
     this.mouse_down[mousecode] = true;
   }
   onMouseUp(mousecode, x, y) {
-    this.onMouseOver(x, y); // update this.mouse_mapped
+    this.onMouseOver(x, y); // update this.mouse_pos
     this.clicks[mousecode] = this.clicks[mousecode] || [];
-    this.clicks[mousecode].push(this.mouse_mapped.slice(0));
+    this.clicks[mousecode].push(this.mouse_pos.slice(0));
     this.mouse_down[mousecode] = false;
   }
   onMouseOver(x, y) {
-    this.mouse_x = x;
-    this.mouse_y = y;
-    this.draw2d.viewportMap(x, y, this.mouse_mapped);
+    this.mouse_pos[0] = x;
+    this.mouse_pos[1] = y;
+    //this.draw2d.viewportMap(x, y, this.mouse_mapped);
   }
   isMouseOver(x, y, w, h) {
     if (this.mouse_over_captured) {
       return false;
     }
-    if (this.mouse_mapped[0] >= x && this.mouse_mapped[0] < x + w &&
-      this.mouse_mapped[1] >= y && this.mouse_mapped[1] < y + h
+    this.mousePos(this.mpos);
+    if (this.mpos[0] >= x && this.mpos[0] < x + w &&
+      this.mpos[1] >= y && this.mpos[1] < y + h
     ) {
       this.mouse_over_captured = true;
       return true;
     }
     return false;
   }
-  isMouseOverSprite(sprite) {
-    const w = sprite.getWidth();
-    const h = sprite.getHeight();
-    const origin = sprite.getOrigin();
-    return this.isMouseOver(sprite.x - origin[0], sprite.y - origin[1], w, h);
-  }
   isMouseDown(button) {
     button = button || 0;
     return this.mouse_down[button];
   }
-  mousePos() {
-    return [this.mouse_mapped[0], this.mouse_mapped[1]];
+  // returns position mapped to current camera view
+  mousePos(dst) {
+    dst = dst || new Draw2D.floatArray(2);
+    this.camera.physicalToVirtual(dst, this.mouse_pos);
+    return dst;
   }
   clickHit(x, y, w, h, button) {
     button = button || 0;
     if (!this.clicks[button]) {
       return false;
     }
-    for (var ii = 0; ii < this.clicks[button].length; ++ii) {
-      var pos = this.clicks[button][ii];
-      if (pos[0] >= x && (w === Infinity || pos[0] < x + w) && pos[1] >= y && (h === Infinity || pos[1] < y + h)) {
+    this.mousePos(this.mpos);
+    for (let ii = 0; ii < this.clicks[button].length; ++ii) {
+      let pos = this.clicks[button][ii];
+      this.camera.physicalToVirtual(this.mpos, this.mouse_pos);
+      if (this.mpos[0] >= x && (w === Infinity || this.mpos[0] < x + w) && this.mpos[1] >= y && (h === Infinity || this.mpos[1] < y + h)) {
         this.clicks[button].splice(ii, 1);
-        return pos;
+        return this.mpos.slice(0);
       }
     }
     return false;
-  }
-  clickHitSprite(sprite) {
-    const w = sprite.getWidth();
-    const h = sprite.getHeight();
-    return this.clickHit(sprite.x - w/2, sprite.y - h/2, w, h);
   }
 
   onTouchChange(param) {
@@ -135,10 +132,10 @@ class GlovInput {
       if (this.last_touch_state.length === 1 && this.touch_state.length === 0) {
         // click!
         this.mouse_down[0] = false;
-        // update this.mouse_mapped
+        // update this.mouse_pos
         this.onMouseOver(this.last_touch_state[0].positionX, this.last_touch_state[0].positionY);
         this.clicks[0] = this.clicks[0] || [];
-        this.clicks[0].push(this.mouse_mapped.slice(0));
+        this.clicks[0].push(this.mouse_pos.slice(0));
       } else if (this.touch_state.length === 1) {
         this.mouse_down[0] = true;
         this.onMouseOver(this.touch_state[0].positionX, this.touch_state[0].positionY);
@@ -150,9 +147,9 @@ class GlovInput {
     //throw JSON.stringify(param, undefined, 2);
   }
   isTouchDown(x, y, w, h) {
-    var pos = [];
     for (var ii = 0; ii < this.touch_state.length; ++ii) {
-      this.draw2d.viewportMap(this.touch_state[ii].positionX, this.touch_state[ii].positionY, pos);
+      this.camera.physicalToVirtual(this.mpos, [this.touch_state[ii].positionX, this.touch_state[ii].positionY]);
+      let pos = this.mpos;
       if (x === undefined || pos[0] >= x && pos[0] < x + w && pos[1] >= y && pos[1] < y + h) {
         return pos;
       }
@@ -215,25 +212,25 @@ class GlovInput {
         ps[c] = UP_EDGE;
       }
     }
-    check(x < -this.pad_threshold, this.padCodes.ANALOG_LEFT);
-    check(x > this.pad_threshold, this.padCodes.ANALOG_RIGHT);
-    check(y < -this.pad_threshold, this.padCodes.ANALOG_DOWN);
-    check(y > this.pad_threshold, this.padCodes.ANALOG_UP);
+    check(x < -this.pad_threshold, this.pad_codes.ANALOG_LEFT);
+    check(x > this.pad_threshold, this.pad_codes.ANALOG_RIGHT);
+    check(y < -this.pad_threshold, this.pad_codes.ANALOG_DOWN);
+    check(y > this.pad_threshold, this.pad_codes.ANALOG_UP);
   }
   isPadButtonDown(padindex, padcode) {
     if (!this.pad_states[padindex]) {
       return false;
     }
-    if (padcode === this.padCodes.LEFT && this.isPadButtonDown(padindex, this.padCodes.ANALOG_LEFT)) {
+    if (padcode === this.pad_codes.LEFT && this.isPadButtonDown(padindex, this.pad_codes.ANALOG_LEFT)) {
       return true;
     }
-    if (padcode === this.padCodes.RIGHT && this.isPadButtonDown(padindex, this.padCodes.ANALOG_RIGHT)) {
+    if (padcode === this.pad_codes.RIGHT && this.isPadButtonDown(padindex, this.pad_codes.ANALOG_RIGHT)) {
       return true;
     }
-    if (padcode === this.padCodes.UP && this.isPadButtonDown(padindex, this.padCodes.ANALOG_UP)) {
+    if (padcode === this.pad_codes.UP && this.isPadButtonDown(padindex, this.pad_codes.ANALOG_UP)) {
       return true;
     }
-    if (padcode === this.padCodes.DOWN && this.isPadButtonDown(padindex, this.padCodes.ANALOG_DOWN)) {
+    if (padcode === this.pad_codes.DOWN && this.isPadButtonDown(padindex, this.pad_codes.ANALOG_DOWN)) {
       return true;
     }
     return !!this.pad_states[padindex][padcode];
@@ -242,16 +239,16 @@ class GlovInput {
     if (!this.pad_states[padindex]) {
       return false;
     }
-    if (padcode === this.padCodes.LEFT && this.padDownHit(padindex, this.padCodes.ANALOG_LEFT)) {
+    if (padcode === this.pad_codes.LEFT && this.padDownHit(padindex, this.pad_codes.ANALOG_LEFT)) {
       return true;
     }
-    if (padcode === this.padCodes.RIGHT && this.padDownHit(padindex, this.padCodes.ANALOG_RIGHT)) {
+    if (padcode === this.pad_codes.RIGHT && this.padDownHit(padindex, this.pad_codes.ANALOG_RIGHT)) {
       return true;
     }
-    if (padcode === this.padCodes.UP && this.padDownHit(padindex, this.padCodes.ANALOG_UP)) {
+    if (padcode === this.pad_codes.UP && this.padDownHit(padindex, this.pad_codes.ANALOG_UP)) {
       return true;
     }
-    if (padcode === this.padCodes.DOWN && this.padDownHit(padindex, this.padCodes.ANALOG_DOWN)) {
+    if (padcode === this.pad_codes.DOWN && this.padDownHit(padindex, this.pad_codes.ANALOG_DOWN)) {
       return true;
     }
     if (this.pad_states[padindex][padcode] === DOWN_EDGE) {
@@ -264,16 +261,16 @@ class GlovInput {
     if (!this.pad_states[padindex]) {
       return false;
     }
-    if (padcode === this.padCodes.LEFT && this.padUpHit(padindex, this.padCodes.ANALOG_LEFT)) {
+    if (padcode === this.pad_codes.LEFT && this.padUpHit(padindex, this.pad_codes.ANALOG_LEFT)) {
       return true;
     }
-    if (padcode === this.padCodes.RIGHT && this.padUpHit(padindex, this.padCodes.ANALOG_RIGHT)) {
+    if (padcode === this.pad_codes.RIGHT && this.padUpHit(padindex, this.pad_codes.ANALOG_RIGHT)) {
       return true;
     }
-    if (padcode === this.padCodes.UP && this.padUpHit(padindex, this.padCodes.ANALOG_UP)) {
+    if (padcode === this.pad_codes.UP && this.padUpHit(padindex, this.pad_codes.ANALOG_UP)) {
       return true;
     }
-    if (padcode === this.padCodes.DOWN && this.padUpHit(padindex, this.padCodes.ANALOG_DOWN)) {
+    if (padcode === this.pad_codes.DOWN && this.padUpHit(padindex, this.pad_codes.ANALOG_DOWN)) {
       return true;
     }
     if (this.pad_states[padindex][padcode] === UP_EDGE) {
@@ -285,6 +282,8 @@ class GlovInput {
 
 }
 
-export function create(input_device, draw2d) {
-  return new GlovInput(input_device, draw2d);
+export function create() {
+  let args = Array.prototype.slice.call(arguments, 0);
+  args.splice(0,0, null);
+  return new (Function.prototype.bind.apply(GlovInput, args))();
 }

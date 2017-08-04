@@ -214,15 +214,16 @@ function techParamsGet() {
 }
 
 class GlovFont {
-  constructor(draw_2d, draw_list, font_info, texture) {
+  constructor(draw_list, font_info, texture) {
     assert(gd_params);
     assert(font_info.font_size!==0); // Got lost somewhere
 
     this.texture = texture;
     this.font_info = font_info;
     this.blend_mode = 'alpha';
-    this.draw_2d = g_draw_2d = draw_2d;
+    this.draw_2d = g_draw_2d = draw_list.draw_2d;
     this.draw_list = draw_list;
+    this.camera = this.draw_list.camera;
 
     // build lookup
     this.char_infos = [];
@@ -295,15 +296,17 @@ class GlovFont {
     return this.drawSized(style, x, y, z, x_size, y_size, text);
   }
 
-  /*
   // returns height
   drawSizedColorWrapped(style, x, y, z, w, indent, x_size, y_size, color, text) {
-    return drawScaledWrapped(glovFontStyleColored(style, color), x, y, z, w, indent, x_size / font_info.font_size, y_size / font_info.font_size, text);
+    return this.drawScaledWrapped(styleColored(style, color), x, y, z, w, indent, x_size / this.font_info.font_size, y_size / this.font_info.font_size, text);
+  }
+  drawSizedWrapped(style, x, y, z, w, indent, x_size, y_size, text) {
+    return this.drawScaledWrapped(style, x, y, z, w, indent, x_size / this.font_info.font_size, y_size / this.font_info.font_size, text);
   }
 
-  int wrapLines(w, indent, x_size, text, std::function<void(x, int linenum, const char *word)> word_cb) {
-    return WrapLinesScaled(w, indent, x_size / font_info.font_size, text, word_cb);
-  }*/
+  wrapLines(w, indent, x_size, text, word_cb /*(x, int linenum, const char *word)*/) {
+    return this.wrapLinesScaled(w, indent, x_size / this.font_info.font_size, text, word_cb);
+  }
 
   infoFromChar(c)
   {
@@ -349,72 +352,68 @@ class GlovFont {
     return ret;
   }
 
-  /*
-  int wrapLinesScaled(w, indent, xsc, text, std::function<void(x, int linenum, const char *word)> word_cb){
-    WCHAR *temp = _wcsdup(text);
-    int len = (int)wcslen(temp);
-    WCHAR *s=temp;
-    WCHAR *wordStart=temp;
-    float word_x0 = 0;
-    float x = word_x0;
-    int linenum = 0;
-    float space_size = infoFromChar(' ').w * xsc;
-    bool bHardWrapMode=false;
-    float x_advance = calcXAdvance(xsc);
+  wrapLinesScaled(w, indent, xsc, text, word_cb /*(x, int linenum, const char *word)*/){
+    let len = text.length;
+    let s = 0;
+    let word_start = 0;
+    let word_x0 = 0;
+    let x = word_x0;
+    let linenum = 0;
+    let space_size = this.infoFromChar(32).w * xsc; // ' '
+    let hard_wrap = false;
+    let x_advance = this.calcXAdvance(xsc);
 
     do
     {
-      WCHAR c = *s;
-      float newx = x;
-      float char_w;
-      if (c=='\t') {
-        let tabsize = xsc * font_info.font_size * 4;
-        newx = ((int)(x / tabsize) + 1) * tabsize;
+      let c = (s < len) ? text.charCodeAt(s) : 0;
+      let newx = x;
+      let char_w;
+      if (c === 9) { // '\t') {
+        let tabsize = xsc * this.font_info.font_size * 4;
+        newx = (Math.floor(x / tabsize) + 1) * tabsize;
         char_w = tabsize;
       } else {
-        let char_info = this.infoFromChar(c);;
-        if (!char_info)
-          char_info = infoFromChar(13);
+        let char_info = this.infoFromChar(c);
+        if (!char_info) {
+          char_info = this.infoFromChar(10);
+        }
         if (char_info)
         {
           char_w = char_info.w * xsc + x_advance;
           newx = x + char_w;
         }
       }
-      if (newx >= w && bHardWrapMode)
+      if (newx >= w && hard_wrap)
       {
         // flush the word so far!
-        *s = '\0';
-        if (word_cb)
-          word_cb(word_x0, linenum, wordStart);
-        *s = c;
-        wordStart = s;
+        if (word_cb) {
+          word_cb(word_x0, linenum, text.slice(word_start, s));
+        }
+        word_start = s;
         word_x0 = indent;
         x = word_x0 + char_w;
         linenum++;
       } else {
         x = newx;
       }
-      if (!(c == ' ' || c == '\0' || c == '\n'))
+      if (!(c === 32 /*' '*/ || c === 0 || c === 10 /*'\n'*/)) {
         s++;
-      if (*s == ' ' || *s == '\0' || *s == '\n')
+        c = (s < len) ? text.charCodeAt(s) : 0;
+      }
+      if (c === 32 /*' '*/ || c === 0 || c === 10 /*'\n'*/)
       {
-        bHardWrapMode= false;
-        WCHAR t = *s;
-        *s = '\0';
-        // draw word
+        hard_wrap = false;
+        // draw word until s
         if (x > w)
         {
           // maybe wrap
-          float word_width = x - word_x0;
+          let word_width = x - word_x0;
           if (word_width > w)
           {
             // not going to fit, split it up!
-            // todo
-            bHardWrapMode = true;
+            hard_wrap = true;
             // recover and restart at word start
-            *s = t;
-            s = wordStart;
+            s = word_start;
             x = word_x0;
             continue;
           } else {
@@ -423,37 +422,34 @@ class GlovFont {
             linenum++;
           }
         }
-        if (word_cb)
-          word_cb(word_x0, linenum, wordStart);
-        wordStart = s+1;
-        if (t == '\n') {
+        if (word_cb) {
+          word_cb(word_x0, linenum, text.slice(word_start, s));
+        }
+        word_start = s+1;
+        if (c === 10 /*'\n'*/) {
           x = indent;
           linenum++;
         } else {
-          x+=space_size;
+          x += space_size;
         }
         word_x0 = x;
-        *s = t;
-        if (t==' ' || t=='\n')
+        if (c === 32 /*' '*/ || c === 10 /*'\n'*/) {
           s++; // advance past space
+        }
       }
-    } while (*s);
-
+    } while (s < len);
     ++linenum;
-
-    free(temp);
     return linenum;
   }
 
-  float drawScaledWrapped(style, x, y, z, w, indent, xsc, ysc, text) {
-    int num_lines = wrapLinesScaled(w, indent, xsc, text, [this, style, xsc, ysc, _x, _y, z](float xoffs, int linenum, const WCHAR *word) {
-      float y = _y + font_info.font_size * ysc * linenum;
-      float x = _x + xoffs;
-      drawScaled(style, x, y, z, xsc, ysc, word);
+  drawScaledWrapped(style, x, y, z, w, indent, xsc, ysc, text) {
+    let num_lines = this.wrapLinesScaled(w, indent, xsc, text, (xoffs, linenum, word) => {
+      let y2 = y + this.font_info.font_size * ysc * linenum;
+      let x2 = x + xoffs;
+      this.drawScaled(style, x2, y2, z, xsc, ysc, word);
     });
-    return num_lines * font_info.font_size * ysc;
+    return num_lines * this.font_info.font_size * ysc;
   }
-  */
 
   calcXAdvance(xsc) {
     // Assume called: applyStyle(style);
@@ -484,8 +480,8 @@ class GlovFont {
     this.applyStyle(style);
 
     const avg_scale_font = (xsc + ysc) * 0.5;
-    const camera_xscale = 1 / this.draw_2d.viewScaleX;
-    const camera_yscale = 1 / this.draw_2d.viewScaleY;
+    const camera_xscale = this.camera.data[4];
+    const camera_yscale = this.camera.data[5];
     let avg_scale_combined = (xsc * camera_xscale + ysc * camera_yscale) * 0.5;
     // avg_scale_combined *= glov_settings.render_scale;
 
@@ -563,8 +559,8 @@ class GlovFont {
           elem.v0 = v0 * tile_height;
           elem.u1 = u1 * tile_width;
           elem.v1 = v1 * tile_height;
-          elem.w = w;
-          elem.h = h;
+          elem.w = w * this.camera.data[4];
+          elem.h = h * this.camera.data[5];
           elem.color = applied_style.color;
           elem.tech_params = techParamsGet();
 
@@ -838,6 +834,8 @@ export function populateDraw2DParams(params) {
   }
 }
 
-export function create(draw_2d, draw_list, font_info, texture) {
-  return new GlovFont(draw_2d, draw_list, font_info, texture);
+export function create() {
+  let args = Array.prototype.slice.call(arguments, 0);
+  args.splice(0,0, null);
+  return new (Function.prototype.bind.apply(GlovFont, args))();
 }

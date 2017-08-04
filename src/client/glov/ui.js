@@ -1,4 +1,6 @@
-const glov_font = require('./glov_font.js');
+/*global math_device: false */
+
+const glov_font = require('./font.js');
 class GlovUI {
   buildRects(ws, hs) {
     let rects = [];
@@ -22,7 +24,7 @@ class GlovUI {
     for (let jj = 0; jj < hs.length; ++jj) {
       let x = 0;
       for (let ii = 0; ii < ws.length; ++ii) {
-        let r = this.mathDevice.v4Build(x, y, x + ws[ii], y + hs[jj]);
+        let r = math_device.v4Build(x, y, x + ws[ii], y + hs[jj]);
         rects.push(r);
         x += ws[ii];
       }
@@ -43,24 +45,23 @@ class GlovUI {
       width : 1,
       height : 1,
       rotation : 0,
-      textureRectangle : this.mathDevice.v4Build(0, 0, uidata.total_w, uidata.total_h),
+      textureRectangle : math_device.v4Build(0, 0, uidata.total_w, uidata.total_h),
       origin: [0,0],
     });
     sprite.uidata = uidata;
     return sprite;
   }
 
-  constructor(mathDevice, glov_sprite, glov_input, font, draw_list) {
+  constructor(glov_sprite, glov_input, font, draw_list) {
     this.glov_sprite = glov_sprite;
     this.glov_input = glov_input;
     this.font = font;
     this.draw_list = draw_list;
-    this.mathDevice = mathDevice;
 
-    this.color_white = mathDevice.v4Build(1, 1, 1, 1);
-    this.color_black = mathDevice.v4Build(0,0,0, 1);
-    this.color_rollover = mathDevice.v4Build(0.8, 0.8, 0.8, 1);
-    this.color_click = mathDevice.v4Build(0.7, 0.7, 0.7, 1);
+    this.color_white = math_device.v4Build(1, 1, 1, 1);
+    this.color_black = math_device.v4Build(0,0,0, 1);
+    this.color_rollover = math_device.v4Build(0.8, 0.8, 0.8, 1);
+    this.color_click = math_device.v4Build(0.7, 0.7, 0.7, 1);
 
     let sprites = this.sprites = {};
     sprites.button = this.loadSpriteRect('button.png', [4, 5, 4], [13]);
@@ -146,6 +147,8 @@ class GlovUI {
 
 }
 
-export function create(mathDevice, glov_sprite, glov_input, font, draw_list) {
-  return new GlovUI(mathDevice, glov_sprite, glov_input, font, draw_list);
+export function create() {
+  let args = Array.prototype.slice.call(arguments, 0);
+  args.splice(0,0, null);
+  return new (Function.prototype.bind.apply(GlovUI, args))();
 }

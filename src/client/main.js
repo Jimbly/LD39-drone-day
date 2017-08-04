@@ -3,35 +3,28 @@
 /*global $: false */
 /*global TurbulenzEngine: true */
 /*global Draw2D: false */
-/*global Camera: false */
-/*global VMath: false */
+/*global math_device: false */
 /*global assert: false */
 
 const DEBUG = false;
 
 TurbulenzEngine.onload = function onloadFn()
 {
-  let intervalID;
-  const graphicsDevice = TurbulenzEngine.createGraphicsDevice({});
-  const mathDevice = TurbulenzEngine.createMathDevice({});
-  let draw2d_params = { graphicsDevice };
-  const glov_font = require('./glov_font.js');
+  const graphics_device = TurbulenzEngine.createGraphicsDevice({});
+  window.math_device = window.math_device || TurbulenzEngine.createMathDevice({});
+  let draw2d_params = { graphicsDevice: graphics_device };
+  const glov_font = require('./glov/font.js');
   glov_font.populateDraw2DParams(draw2d_params);
-  const draw2D = Draw2D.create(draw2d_params);
-  const glov_sprite = require('./glov_sprite.js').create(graphicsDevice);
-  const inputDevice = TurbulenzEngine.createInputDevice({});
-  const input = require('./input.js').create(inputDevice, draw2D);
-  const draw_list = require('./draw_list.js').create(draw2D);
+  const draw_2d = Draw2D.create(draw2d_params);
+  const glov_sprite = require('./glov/sprite.js').create(graphics_device);
+  const glov_camera = require('./glov/camera.js').create(graphics_device, draw_2d);
+  const input_device = TurbulenzEngine.createInputDevice({});
+  const glov_input = require('./glov/input.js').create(input_device, draw_2d, glov_camera);
+  const draw_list = require('./glov/draw_list.js').create(draw_2d, glov_camera);
   const random_seed = require('random-seed');
   const score = require('./score.js');
 
-  const camera = Camera.create(mathDevice);
-  const lookAtPosition = mathDevice.v3Build(0.0, 0.0, 0.0);
-  const worldUp = mathDevice.v3BuildYAxis();
-  const cameraPosition = mathDevice.v3Build(0.0, 0.0, 1.0);
-  camera.lookAt(lookAtPosition, worldUp, cameraPosition);
-  camera.updateViewMatrix();
-  const sound_manager = require('./sound_manager.js').create(camera.matrix);
+  const sound_manager = require('./glov/sound_manager.js').create();
   sound_manager.loadSound('test');
 
   function loadTexture(texname) {
@@ -42,8 +35,8 @@ TurbulenzEngine.onload = function onloadFn()
   }
 
   const arial32_info = require('./img/font/arial32.json');
-  const default_font = glov_font.create(draw2D, draw_list, arial32_info, loadTexture('arial32.png'));
-  const glov_ui = require('./glov_ui.js').create(mathDevice, glov_sprite, input, default_font, draw_list);
+  const font = glov_font.create(draw_list, arial32_info, loadTexture('arial32.png'));
+  const glov_ui = require('./glov/ui.js').create(glov_sprite, glov_input, font, draw_list);
 
   // Preload
   loadTexture('arrows.png');
@@ -54,24 +47,20 @@ TurbulenzEngine.onload = function onloadFn()
   loadTexture('sell.png');
   loadTexture('upgrade_power.png');
 
-  // Viewport for Draw2D.
+  // Virtual viewport for our game logic
   let game_width = 1280;
   let game_height = 960;
-  const color_white = mathDevice.v4Build(1, 1, 1, 1);
-  const color_has_actor = mathDevice.v4Build(1, 1, 1, 0.1);
-  const color_resource_depleted = mathDevice.v4Build(0.2, 0.2, 0.2, 1);
-  const color_resource_non_full = mathDevice.v4Build(0.7, 0.7, 0.7, 1);
-  const color_red = mathDevice.v4Build(1, 0, 0, 1);
-  const color_yellow = mathDevice.v4Build(1, 1, 0, 1);
+  glov_camera.set2DAspectFixed(game_width, game_height);
+  const color_white = math_device.v4Build(1, 1, 1, 1);
+  const color_has_actor = math_device.v4Build(1, 1, 1, 0.1);
+  const color_resource_depleted = math_device.v4Build(0.2, 0.2, 0.2, 1);
+  const color_resource_non_full = math_device.v4Build(0.7, 0.7, 0.7, 1);
+  const color_red = math_device.v4Build(1, 0, 0, 1);
+  const color_yellow = math_device.v4Build(1, 1, 0, 1);
 
-  // Cache keyCodes
-  const keyCodes = inputDevice.keyCodes;
-  const padCodes = input.padCodes;
-
-  let configureParams = {
-    scaleMode : 'scale',
-    viewportRectangle : mathDevice.v4Build(0, 0, game_width, game_height)
-  };
+  // Cache key_codes
+  const key_codes = glov_input.key_codes;
+  const pad_codes = glov_input.pad_codes;
 
   let sprites = {};
   let global_timer = 0;
@@ -106,8 +95,8 @@ TurbulenzEngine.onload = function onloadFn()
     });
     const BUTTON_H = 64;
     const BUTTON_W = 320;
-    if (glov_ui.buttonText(configureParams.viewportRectangle[2] - BUTTON_W,
-      configureParams.viewportRectangle[3] - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Back')) {
+    if (glov_ui.buttonText(glov_camera.x1() - BUTTON_W,
+      glov_camera.y1() - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Back')) {
       game_state = playInit;
     }
   }
@@ -125,7 +114,7 @@ TurbulenzEngine.onload = function onloadFn()
         $('#name').val(score.player_name);
       }
       $('#name').focus(function () {
-        inputDevice.onBlur();
+        input_device.onBlur();
       });
       $('#name').change(function (ev) {
         score.updatePlayerName(level_defs, $('#name').val());
@@ -137,6 +126,32 @@ TurbulenzEngine.onload = function onloadFn()
     $('#name').focus();
   }
 
+  function testInit(dt) {
+    $('.screen').hide();
+    $('#title').show();
+    game_state = test;
+    test(dt);
+  }
+
+  function loading() {
+    let load_count = glov_sprite.loading() + sound_manager.loading();
+    $('#loading').text(`Loading (${load_count})...`);
+    if (!load_count) {
+      game_state = playInit;
+    }
+  }
+
+  function loadingInit() {
+    initGraphics();
+    $('.screen').hide();
+    $('#title').show();
+    game_state = loading;
+    loading();
+  }
+
+  function title(dt) {
+  }
+
   function titleInit(dt) {
     $('.screen').hide();
     $('#title').show();
@@ -144,24 +159,16 @@ TurbulenzEngine.onload = function onloadFn()
     title(dt);
   }
 
-  function title() {
-    //test(dt);
-    if (true && 'ready') {
-      game_state = playInit;
-    }
-  }
-
   let indicator_pos = {};
   let tutorial_states = [
     null,
     {
-      msg: [
-        'Welcome to Drone Supervisor!',
-        'You earn money by having Drones',
-        'deliver resources to your base.',
-        'To get started, select the',
+      msg:
+        'Welcome to Drone Supervisor!\n' +
+        'You earn money by having Drones ' +
+        'deliver resources to your base. ' +
+        'To get started, select the ' +
         'Build Drone tool.',
-      ],
       indicator_name: 'buy_drone',
       indicator: {x: 100, y: 100},
       done: function () {
@@ -169,10 +176,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Now, place a Drone in the',
-        'indicated square.',
-      ],
+      msg: 'Now, place a Drone in the indicated square.',
       indicator: {x: 0, y: 3},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && tile_type === 'drone';
@@ -182,15 +186,14 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Good job!',
-        'Now, we want this Drone to',
-        'travel to the right.',
-        'Click on the newly placed Drone',
-        'until he faces to the right,',
-        'towards your Base in the center',
+      msg:
+        'Good job!\n' +
+        'Now, we want this Drone to ' +
+        'travel to the right.\n' +
+        'Click on the newly placed Drone ' +
+        'until he faces to the right, ' +
+        'towards your Base in the center ' +
         'of the level.',
-      ],
       indicator: {x: 0, y: 3},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && tile_type === 'drone';
@@ -200,10 +203,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Perfect. Let\'s see how',
-        'he\'ll do.  Click Preview.',
-      ],
+      msg: 'Perfect. Let\'s see how he\'ll do.  Click Preview.',
       indicator_name: 'preview',
       done: function () {
         return play_state === 'preview';
@@ -216,41 +216,26 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Great! He picked up and sold',
-        'one Gold, worth $100.',
-        'If you want to see that again,',
-        'choose Cancel, and click Preview',
-        'again.',
-        'To continue, click Next Turn,',
-        'cashing in your earnings.',
-      ],
+      msg: 'Great! He picked up and sold one Gold, worth $100.\n' +
+        'If you want to see that again, choose Cancel, and click Preview again.\n' +
+        'To continue, click Next Turn, cashing in your earnings.',
       indicator_name: 'next_turn',
       done: function () {
         return play_state === 'build' && dd.turn === 1;
       },
     },
     {
-      msg: [
-        'Now it\'s another turn and',
-        'we have more money to spend.',
-        '',
-        'Let\s harvest the Silver, this',
-        'will require changint the',
-        'direction of Drones with Arrows.',
-        '',
+      msg:
+        'Now it\'s another turn and we have more money to spend.\n\n' +
+        'Let\s harvest the Silver, this will require changing the direction of Drones with Arrows.\n\n' +
         'Select the Arrow tool.',
-      ],
       indicator_name: 'buy_arrow',
       done: function () {
         return current_tile === 'arrow';
       },
     },
     {
-      msg: [
-        'Now, place a Down Arrow in',
-        'the indicated square.',
-      ],
+      msg: 'Now, place a Down Arrow in the indicated square.',
       indicator: {x: 3, y: 6},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 3 && y === 6 && tile_type === 'arrow';
@@ -261,10 +246,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'And an Up Arrow in',
-        'this indicated square.',
-      ],
+      msg: 'And an Up Arrow in this indicated square.',
       indicator: {x: 3, y: 7},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 3 && y === 7 && tile_type === 'arrow';
@@ -275,11 +257,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Great!',
-        '',
-        'Now, a Drone facing left here.',
-      ],
+      msg: 'Great!\n\nNow, a Drone facing left here.',
       indicator: {x: 4, y: 6},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 4 && y === 6 && tile_type === 'drone';
@@ -290,15 +268,8 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'One last thing, let\'s move',
-        'our first drone somewhere',
-        'better.',
-        '',
-        'Pick it up by right clicking,',
-        'shift-clicking, or using the',
-        'Sell tool.',
-      ],
+      msg: 'One last thing, let\'s move our first drone somewhere better.\n\n' +
+        'Pick it up by right clicking, shift-clicking, or using the Sell tool.',
       indicator: {x: 0, y: 3},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && !tile_type;
@@ -308,10 +279,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Put it back down, facing right,',
-        'right here.',
-      ],
+      msg: 'Put it back down, facing right, right here.',
       indicator: {x: 2, y: 4},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 2 && y === 4 && tile_type === 'drone';
@@ -322,10 +290,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Perfect. Let\'s get some',
-        'more money.  Click Preview.',
-      ],
+      msg: 'Perfect. Let\'s get some more money.  Click Preview.',
       indicator_name: 'preview',
       done: function () {
         return play_state === 'preview';
@@ -338,30 +303,17 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'See how the left Drone stayed',
-        'in one place and sold all of',
-        'the Gold?',
-        'Notice the right Drone following',
-        'the arrows we placed.',
-        '',
-        'To continue, click Next Turn,',
-        'cashing in your earnings.',
-      ],
+      msg: 'See how the left Drone stayed in one place and sold all of the Gold?\n' +
+        'Notice the right Drone following the arrows we placed.\n\n' +
+        'To continue, click Next Turn, cashing in your earnings.',
       indicator_name: 'next_turn',
       done: function () {
         return play_state === 'build' && dd.turn === 2;
       },
     },
     {
-      msg: [
-        'At the top, it says our goal',
-        'is to Craft and Sell 1',
-        'jewlery.  We do not have enough',
-        'money to build a crafting',
-        'station yet, so run one more turn',
-        'with this same configuration.',
-      ],
+      msg: 'At the top, it says our goal is to Craft and Sell 1 jewelry.' +
+        '  We do not have enough money to build a crafting station yet, so run one more turn with this same configuration.',
       indicator_name: 'preview',
       done: function () {
         return play_state === 'preview';
@@ -374,10 +326,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Great, that should be',
-        'enough money!',
-      ],
+      msg: 'Great, that should be enough money!',
       indicator_name: 'next_turn',
       done: function () {
         let ret = play_state === 'build' && dd.turn === 3;
@@ -388,11 +337,7 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Now, remove both drones and',
-        'both arrows to reclaim our',
-        'money.',
-      ],
+      msg: 'Now, remove both drones and both arrows to reclaim our money.',
       indicator_name: 'buy_sell',
       buy_validate: function (x, y, tile_type, dir) {
         return !tile_type;
@@ -402,21 +347,14 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Select the 2-Node Crafting',
-        'Station.',
-      ],
+      msg: 'Select the 2-Node Crafting Station.',
       indicator_name: 'buy_craft2',
       done: function () {
         return current_tile === 'craft2';
       },
     },
     {
-      msg: [
-        'And place it here, with the',
-        'Output node (red) in the',
-        'upper right.',
-      ],
+      msg: 'And place it here, with the Output node (red) in the upper right.',
       indicator: {x: 1, y: 6},
       buy_validate: function (x, y, tile_type, dir) {
         return x === 1 && y === 6 && tile_type === 'craft2';
@@ -427,22 +365,15 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'Finally, place 3 Drones and',
-        '2 Arrows in the configuration',
-        'shown here:',
-        '','','',
-        '','','',
-        '','','',
-        '','',
-      ],
+      msg: 'Finally, place 3 Drones and 2 Arrows in the configuration shown here:' +
+        new Array(12).join('\n'),
       buy_validate: function (x, y, tile_type, dir) {
         return x >=0 && x <=3 && y >= 5 && y <= 8;
       },
       done: function () {
         draw_list.queue(sprites.tutorial1,
-          configureParams.viewportRectangle[2] - 380,
-          configureParams.viewportRectangle[3] - 350,
+          glov_camera.x1() - 380,
+          glov_camera.y1() - 350,
           Z_TUT + 3, color_white);
         let test = [
           [0,8,'drone',1],
@@ -466,11 +397,8 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: [
-        'You\'ve done it!',
-        'Play out the turn to complete',
-        'the tutorial.',
-      ],
+      msg: 'You\'ve done it!\n' +
+        'Play out the turn to complete the tutorial.',
       indicator_name: 'preview',
       done: function () {
         return play_state === 'preview';
@@ -490,7 +418,7 @@ TurbulenzEngine.onload = function onloadFn()
   const BASE_SIZE = 3;
   const TILE_SIZE = 64;
   function initGraphics() {
-    if (sprites.drone) {
+    if (sprites.white) {
       return;
     }
     sprites.white = createSprite('white', {
@@ -501,7 +429,7 @@ TurbulenzEngine.onload = function onloadFn()
       rotation : 0,
       color : [1,1,1, 1],
       origin: [0, 0],
-      textureRectangle : mathDevice.v4Build(0, 0, 1, 1)
+      textureRectangle : math_device.v4Build(0, 0, 1, 1)
     });
 
     let spriteSize = 13;
@@ -512,7 +440,7 @@ TurbulenzEngine.onload = function onloadFn()
       let rects = [];
       for (let jj = 0; jj < h; ++jj) {
         for (let ii = 0; ii < w; ++ii) {
-          let r = mathDevice.v4Build(ii * spriteSize * sx, jj * spriteSize * sy, (ii + 1) * spriteSize * sx, (jj + 1) * spriteSize * sy);
+          let r = math_device.v4Build(ii * spriteSize * sx, jj * spriteSize * sy, (ii + 1) * spriteSize * sx, (jj + 1) * spriteSize * sy);
           rects.push(r);
         }
       }
@@ -522,14 +450,14 @@ TurbulenzEngine.onload = function onloadFn()
       width : TILE_SIZE * 4 * background_tile,
       height : TILE_SIZE * 4 * background_tile,
       rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, spriteSize * 4 * background_tile, spriteSize * 4 * background_tile),
+      textureRectangle : math_device.v4Build(0, 0, spriteSize * 4 * background_tile, spriteSize * 4 * background_tile),
       origin: [0,0],
     });
     sprites.tutorial1 = createSprite('tutorial1.png', {
       width : TILE_SIZE * 4,
       height : TILE_SIZE * 4,
       rotation : 0,
-      textureRectangle : mathDevice.v4Build(0, 0, 128, 128),
+      textureRectangle : math_device.v4Build(0, 0, 128, 128),
       origin: [0,0],
     });
     function loadSprite(name, tx, ty, sx, sy) {
@@ -537,7 +465,7 @@ TurbulenzEngine.onload = function onloadFn()
         width : TILE_SIZE * (sx || 1),
         height : TILE_SIZE * (sy || 1),
         rotation : 0,
-        textureRectangle : mathDevice.v4Build(0, 0, spriteSize * (sx || 1), spriteSize * (sy || 1)),
+        textureRectangle : math_device.v4Build(0, 0, spriteSize * (sx || 1), spriteSize * (sy || 1)),
         origin: [0,0],
       });
       sprites[name].rects = buildRects(tx,ty, sx, sy);
@@ -1511,7 +1439,6 @@ TurbulenzEngine.onload = function onloadFn()
 
   function playInit(dt) {
     $('#canvas').focus();
-    initGraphics();
     $('.screen').hide();
     $('#play').show();
     game_state = play;
@@ -1579,7 +1506,7 @@ TurbulenzEngine.onload = function onloadFn()
     if (s.rects) {
       tex_rect = s.rects[direction];
     }
-    draw_list.queue(s, x * TILE_SIZE + view_offset[0], y * TILE_SIZE + view_offset[1], z, color, null, tex_rect);
+    draw_list.queue(s, x * TILE_SIZE, y * TILE_SIZE, z, color, null, tex_rect);
   }
 
   function easeInOut(v, a)
@@ -1681,8 +1608,8 @@ TurbulenzEngine.onload = function onloadFn()
 
   function drawPanel(x, y, z, w, h) {
     glov_ui.drawBox(sprites.panel, x, y, z, w, h, 80, [1,1,0.8,1]);
-    input.clickHit(x, y, w, h);
-    input.isMouseOver(x, y, w, h);
+    glov_input.clickHit(x, y, w, h);
+    glov_input.isMouseOver(x, y, w, h);
   }
 
   function drawResource(x, y, tile) {
@@ -1704,7 +1631,7 @@ TurbulenzEngine.onload = function onloadFn()
       let ty = y + 8;
       if (tooltip) {
         for (let ii = 0; ii < tooltip.length; ++ii) {
-          default_font.drawSized(panel_font_style, tx, ty, z + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
+          font.drawSized(panel_font_style, tx, ty, z + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
           ty += TOOLTIP_FONT_SIZE;
         }
         drawPanel(tooltip_x, y, z + 1, TOOLTIP_W, ty - y + 8);
@@ -1720,20 +1647,20 @@ TurbulenzEngine.onload = function onloadFn()
     if (!dd.ld || dd.ld.tut) {
       return;
     }
-    let pan = input.isKeyDown(keyCodes.SPACE) || input.isMouseDown(0) || input.isMouseDown(1) || input.isMouseDown(2);
+    let pan = glov_input.isKeyDown(key_codes.SPACE) || glov_input.isMouseDown(0) || glov_input.isMouseDown(1) || glov_input.isMouseDown(2);
     if (pan && !panning_active) {
       panning_active = true;
-      panning_start = panning_lastpos = input.mousePos();
+      panning_start = panning_lastpos = glov_input.mousePos();
     } else if (!pan && panning_active) {
       panning_active = false;
       panning_lastpos = null;
-      let newpos = input.mousePos();
+      let newpos = glov_input.mousePos();
       let delta = [newpos[0] - panning_start[0], newpos[1] - panning_start[1]];
       if (Math.abs(delta[0]) + Math.abs(delta[1]) > 20) {
-        input.clickHit(-Infinity, -Infinity, Infinity, Infinity);
+        glov_input.clickHit(-Infinity, -Infinity, Infinity, Infinity);
       }
     } else if (pan) {
-      let newpos = input.mousePos();
+      let newpos = glov_input.mousePos();
       let delta = [newpos[0] - panning_lastpos[0], newpos[1] - panning_lastpos[1]];
       panning_lastpos = newpos;
       view_offset[0] += delta[0];
@@ -1747,10 +1674,33 @@ TurbulenzEngine.onload = function onloadFn()
     let ty0 = y - h;
     let ty = ty0 + 8;
     for (let ii = 0; ii < tooltip.length; ++ii) {
-      default_font.drawSized(panel_font_style, tx, ty, Z_UI + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
+      font.drawSized(panel_font_style, tx, ty, Z_UI + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
       ty += TOOLTIP_FONT_SIZE;
     }
     drawPanel(x, ty0, Z_UI+1, TOOLTIP_W, h);
+  }
+
+  function drawFloaters(dt, is_ui) {
+    for (let ii = floaters.length - 1; ii >= 0; --ii) {
+      let fl = floaters[ii];
+      if (fl.is_ui && !is_ui || !fl.is_ui && is_ui) {
+        continue;
+      }
+      fl.t += dt;
+      let y = fl.y - easeOut(fl.t / fl.time, 2) * FLOATER_DIST;
+      if (fl.t > fl.time) {
+        floaters[ii] = floaters[floaters.length - 1];
+        floaters.pop();
+      } else {
+        /*jshint bitwise:false*/
+        let a = Math.min(1, (2 - 2 * fl.t / fl.time)) * 255 | 0;
+        let style = glov_font.style(fl.style, {
+          color: fl.style.color & 0xFFFFFF00 | a,
+          outline_color: fl.style.outline_color & 0xFFFFFF00 | a,
+        });
+        font.drawSized(style, fl.x, y, fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
+      }
+    }
   }
 
   let money_x, money_y;
@@ -1758,6 +1708,7 @@ TurbulenzEngine.onload = function onloadFn()
   let show_recipes = false;
   let auto_started_tut = false;
   function play(dt) {
+    glov_camera.set2DAspectFixed(game_width, game_height);
     indicator_pos.next_turn = null;
     const BUTTON_H = 64;
     const BUTTON_W = 320;
@@ -1765,9 +1716,9 @@ TurbulenzEngine.onload = function onloadFn()
     const BUTTON_H_BUY = 64 + 20;
     const COST_FONT_SIZE = 26;
     const COST_FONT_PAD = (BUTTON_H_BUY - COST_FONT_SIZE) / 2;
-    const UI_BOTTOM = configureParams.viewportRectangle[3];
-    const UI_SIDE = configureParams.viewportRectangle[0];
-    const UI_RIGHT = configureParams.viewportRectangle[2];
+    const UI_BOTTOM = glov_camera.y1();
+    const UI_SIDE = glov_camera.x0();
+    const UI_RIGHT = glov_camera.x1();
     const TOOLTIP_X = UI_SIDE + PANEL_W;
     let status = '';
     let button_bottom_count = 0;
@@ -1801,22 +1752,22 @@ TurbulenzEngine.onload = function onloadFn()
       // Top UI
       let TOP_W = 500;
       let TOP_X = PANEL_W + (game_width - PANEL_W - TOP_W) / 2;
-      let top_y0 = configureParams.viewportRectangle[1];
+      let top_y0 = glov_camera.y0();
       let top_y = top_y0;
       const TOP_FONT_SIZE = 28;
-      default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
+      font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
         glov_font.ALIGN.HCENTER, TOP_W, 0, `Level: ${dd.ld.name}`);
       top_y += TOP_FONT_SIZE;
       if (dd.ld.goal[0] === 'sell') {
-        default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
+        font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
           glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Craft and Sell 1 ${dd.ld.goal[1]}`);
         top_y += TOP_FONT_SIZE;
       } else if (dd.ld.goal[0] === 'net_worth') {
-        default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
+        font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
           glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Net Worth of \$${dd.ld.goal[1]}`);
         top_y += TOP_FONT_SIZE;
       }
-      default_font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE * 0.8, TOP_FONT_SIZE * 0.8,
+      font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE * 0.8, TOP_FONT_SIZE * 0.8,
         glov_font.ALIGN.HCENTER, TOP_W, 0,
         `Current Net Worth: \$${dd.netWorth()}`);
       top_y += TOP_FONT_SIZE * 0.8;
@@ -1830,13 +1781,13 @@ TurbulenzEngine.onload = function onloadFn()
       let font_size = 28;
       let pad = 8;
 
-      money_x = x + default_font.getStringWidth(panel_font_style, font_size, 'Money: ');
+      money_x = x + font.getStringWidth(panel_font_style, font_size, 'Money: ');
       money_y = y + 12;
-      default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
         `Money: \$${dd.money}`);
       y += font_size + pad;
 
-      default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
         'Build:');
       y += font_size + pad;
 
@@ -1849,7 +1800,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
         indicator_pos['buy_' + store[ii].type] = { x: bx + BUTTON_H_BUY / 2, y: y + 16 };
         if (buttonTooltip(bx, y, Z_UI, BUTTON_W_BUY, BUTTON_H_BUY, sprites[store[ii].type], sprites[store[ii].type].rects[tile], TOOLTIP_X, store[ii].tooltip) ||
-          input.keyDownHit(keyCodes['NUMBER_' + (1 + ii)])
+          glov_input.keyDownHit(key_codes['NUMBER_' + (1 + ii)])
         ) {
           if (current_tile === store[ii].type && current_tile !== 'sell') {
             current_direction = (current_direction + 1) % 4;
@@ -1868,7 +1819,7 @@ TurbulenzEngine.onload = function onloadFn()
 
         if (tools_w === 1 && store[ii].type !== 'sell') {
           let cost = dd.costOf(store[ii].type, 1);
-          default_font.drawSized(panel_font_style, x + BUTTON_W_BUY + 8, y + COST_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
+          font.drawSized(panel_font_style, x + BUTTON_W_BUY + 8, y + COST_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
             `\$${cost}`);
         }
 
@@ -1882,7 +1833,7 @@ TurbulenzEngine.onload = function onloadFn()
 
       y += pad;
 
-      default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
         'Upgrade:');
       y += font_size + pad;
 
@@ -1892,22 +1843,22 @@ TurbulenzEngine.onload = function onloadFn()
       for (let ii = 0; ii < upgrades.length; ++ii) {
         let ugt = upgrades[ii].type;
 
-        default_font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+        font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
           'Drone Power');
         y += font_size + pad;
 
         draw_list.queue(sprites[ugt], x, y, Z_UI, color_white);
 
         /* jshint bitwise:false*/
-        default_font.drawAlignedSized(panel_font_style, x, y, Z_UI + 1, font_size, font_size,
+        font.drawAlignedSized(panel_font_style, x, y, Z_UI + 1, font_size, font_size,
           glov_font.ALIGN.HCENTER | glov_font.ALIGN.VCENTER, ICON_UPGRADE_SIZE, ICON_UPGRADE_SIZE, `${dd.max_power}`);
 
         let cost_up = dd.upgradeCost(ugt, 1);
-        default_font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
+        font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
           `\$${cost_up}`);
         let cost_down = dd.upgradeCost(ugt, 0);
         if (cost_down) {
-          default_font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + BUTTON_UPGRADE_SIZE + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
+          font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + BUTTON_UPGRADE_SIZE + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
             `\$${cost_down}`);
         }
 
@@ -1937,7 +1888,7 @@ TurbulenzEngine.onload = function onloadFn()
         status = `Turn ${dd.turn + 1}`;
       }
 
-      if (input.keyDownHit(keyCodes.TAB)) {
+      if (glov_input.keyDownHit(key_codes.TAB)) {
         if (current_tile === 'drone') {
           current_tile = 'arrow';
         } else {
@@ -1946,7 +1897,7 @@ TurbulenzEngine.onload = function onloadFn()
       }
     } else if (play_state === 'preview') {
       let efftick_time = tick_time;
-      if (input.isKeyDown(keyCodes.F) || input.isKeyDown(keyCodes.LEFT_SHIFT) || input.isKeyDown(keyCodes.RIGHT_SHIFT)) {
+      if (glov_input.isKeyDown(key_codes.F) || glov_input.isKeyDown(key_codes.LEFT_SHIFT) || glov_input.isKeyDown(key_codes.RIGHT_SHIFT)) {
         efftick_time = ADVANCE_SPEED_FAST;
       }
       let effdt = dt / efftick_time;
@@ -1969,7 +1920,7 @@ TurbulenzEngine.onload = function onloadFn()
         glov_ui.drawBox(sprites.panel, UI_RIGHT - POWER_BAR_W, bar_y, Z_UI + 1, POWER_BAR_W, POWER_BAR_H * power_left,
           64, [0,1,0,1]);
         if (dd.power) {
-          default_font.drawAlignedSized(null, UI_RIGHT - POWER_BAR_W, bar_y + 8, Z_UI + 2, 64, 64, glov_font.ALIGN.HCENTER,
+          font.drawAlignedSized(null, UI_RIGHT - POWER_BAR_W, bar_y + 8, Z_UI + 2, 64, 64, glov_font.ALIGN.HCENTER,
             POWER_BAR_W, 0, `${dd.power}`);
         }
       }
@@ -2039,12 +1990,12 @@ TurbulenzEngine.onload = function onloadFn()
       let x = MENU_X;
       let y = MENU_Y + 8;
 
-      default_font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
+      font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
         glov_font.ALIGN.HCENTER, MENU_W, 0,
         'Drone Supervisor');
       y += MENU_FONT_SIZE1;
 
-      default_font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE2, MENU_FONT_SIZE2,
+      font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE2, MENU_FONT_SIZE2,
         glov_font.ALIGN.HCENTER, MENU_W, 0,
         'Ludum Dare #39 Entry by Jimbly');
       y += MENU_FONT_SIZE2;
@@ -2058,9 +2009,9 @@ TurbulenzEngine.onload = function onloadFn()
       const MENU_BUTTON_W = BUTTON_W;
       const LEVEL_X = SCORE_X - MENU_BUTTON_W - 16;
       const SCORE_SIZE = MENU_FONT_SIZE2;
-      default_font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         'Score');
-      default_font.drawSized(panel_font_style, SCORE_HIGH_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_HIGH_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         'High Score');
       y += SCORE_SIZE;
       let score_total = { turns: 0, net_worth: 0 };
@@ -2073,7 +2024,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
 
         // Score
-        default_font.drawAlignedSized(panel_font_style, SCORE_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
+        font.drawAlignedSized(panel_font_style, SCORE_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
           glov_font.ALIGN.HFIT, SCORE_W - 16, 0,
           ld.local_score ? score.formatScore(ld.local_score) : 'incomplete');
         if (ld.local_score) {
@@ -2088,7 +2039,7 @@ TurbulenzEngine.onload = function onloadFn()
         high_score = high_score && high_score[0];
         if (high_score) {
           let mine = ld.local_score && high_score.score.turns === ld.local_score.turns && high_score.score.net_worth === ld.local_score.net_worth;
-          default_font.drawAlignedSized(mine ? font_style_hs_mine : font_style_hs_other,
+          font.drawAlignedSized(mine ? font_style_hs_mine : font_style_hs_other,
             SCORE_HIGH_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
             glov_font.ALIGN.HFIT, SCORE_HIGH_W - 16, 0,
             score.formatName(high_score) + ' ' + score.formatScore(high_score.score));
@@ -2100,9 +2051,9 @@ TurbulenzEngine.onload = function onloadFn()
         }
         y += BUTTON_H + 4;
       }
-      default_font.drawAlignedSized(panel_font_style, LEVEL_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawAlignedSized(panel_font_style, LEVEL_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         glov_font.ALIGN.HCENTER, MENU_BUTTON_W, 0, 'Total Score');
-      default_font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
         all_done ?
         score.formatScore(score_total) :
         'incomplete');
@@ -2147,15 +2098,15 @@ TurbulenzEngine.onload = function onloadFn()
 
       drawPanel(MENU_X, MENU_Y, Z_UI - 1, MENU_W, y - MENU_Y);
 
-      draw_list.queue(sprites.white, configureParams.viewportRectangle[0], configureParams.viewportRectangle[1], Z_UI - 2, [0,0,0,0.9],
-        [configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0], configureParams.viewportRectangle[3] - configureParams.viewportRectangle[1], 1, 1]);
+      draw_list.queue(sprites.white, glov_camera.x0(), glov_camera.y0(), Z_UI - 2, [0,0,0,0.9],
+        [glov_camera.x1() - glov_camera.x0(), glov_camera.y1() - glov_camera.y0(), 1, 1]);
     } else if (play_state === 'recipes') {
 
       let x = 0;
       let w = game_width;
       let y = 20;
       const MENU_FONT_SIZE1 = 48;
-      default_font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
+      font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
         glov_font.ALIGN.HCENTER, w, 0,
         'Recipes and Resources');
       y += MENU_FONT_SIZE1;
@@ -2174,7 +2125,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
         if (idx >= idx0 && idx < idx1) {
           drawResource(x, y, r.tile);
-          default_font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
+          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
             `${r.type} (\$${r.value})`);
           y += line_size;
         }
@@ -2184,19 +2135,19 @@ TurbulenzEngine.onload = function onloadFn()
         let r = recipes[ii];
         if (idx >= idx0 && idx < idx1) {
           drawResource(x, y, r[0]);
-          default_font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
+          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, Z_UI, font_size, font_size,
             `${r[1]} (\$${r[2]})`);
 
           let xx = x + 400;
           let ingred = r.slice(3);
           for (let ii = 0; ii < ingred.length; ++ii) {
-            default_font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, (ii === 0) ? '=' : '+');
+            font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, (ii === 0) ? '=' : '+');
             xx += font_size * 2;
             if (ingred[ii]) {
               drawResource(xx, y, resource_types[findResourceType(ingred[ii])].tile);
               xx += TILE_SIZE;
             }
-            default_font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, ingred[ii] || '(anything)');
+            font.drawSized(panel_font_style, xx, y, Z_UI, font_size, font_size, ingred[ii] || '(anything)');
             xx += 180;
           }
           y += line_size;
@@ -2218,47 +2169,52 @@ TurbulenzEngine.onload = function onloadFn()
     }
     if (status) {
       const STATUS_H = 32;
-      default_font.drawSized(panel_font_style, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
+      font.drawSized(panel_font_style, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
     }
 
+    let tut_indicator = null;
     if (play_state !== 'menu' && play_state !== 'recipes') {
       // bar under bottom UI
       let bar_h = BUTTON_H + 16;
-      drawPanel(configureParams.viewportRectangle[0] - 64, UI_BOTTOM - bar_h, Z_UI - 2,
-        configureParams.viewportRectangle[2] - configureParams.viewportRectangle[0] + 128, bar_h + 64);
+      drawPanel(glov_camera.x0() - 64, UI_BOTTOM - bar_h, Z_UI - 2,
+        glov_camera.x1() - glov_camera.x0() + 128, bar_h + 64);
 
       let tut_state = tutorial_states[dd.tutorial_state];
       if (tut_state) {
         let tut_msg = tut_state.msg;
         if (tut_msg) {
           let font_size = 24;
-          let tut_h = tut_msg.length * font_size + font_size * 1.5 + 16*2;
           let tut_w = 400;
-          let tut_x = configureParams.viewportRectangle[2] - tut_w;
-          let tut_y0 = configureParams.viewportRectangle[3] - bar_h - tut_h;
-          let tut_y = tut_y0 + 16;
-          default_font.drawSized(panel_font_style, tut_x + 16, tut_y, Z_TUT, font_size * 1.5, font_size * 1.5,
+          let tut_pad = 16;
+          let text_w = tut_w - tut_pad * 2;
+          let tut_indent = 0;
+          let lines = font.wrapLines(text_w, tut_indent, font_size, tut_msg);
+          let tut_h = lines * font_size + font_size * 1.5 + tut_pad*2;
+          let tut_x = glov_camera.x1() - tut_w;
+          let tut_y0 = glov_camera.y1() - bar_h - tut_h;
+          let tut_y = tut_y0 + tut_pad;
+          font.drawSized(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, font_size * 1.5, font_size * 1.5,
             'Tutorial');
           tut_y += font_size * 1.5;
-          for (let ii = 0; ii < tut_msg.length; ++ii) {
-            default_font.drawSized(panel_font_style, tut_x + 16, tut_y, Z_TUT, font_size, font_size,
-              tut_msg[ii]);
-            tut_y += font_size;
-          }
-          drawPanel(tut_x, tut_y0, Z_TUT, tut_w, tut_h);
-        }
-        let indicator;
-        if (tut_state.indicator) {
-          indicator = {
-            x: tut_state.indicator.x * TILE_SIZE + view_offset[0] + TILE_SIZE / 2,
-            y: tut_state.indicator.y * TILE_SIZE + view_offset[1] + 32,
-          };
+          tut_y += font.drawSizedWrapped(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, text_w, tut_indent, font_size, font_size, tut_msg);
+          drawPanel(tut_x, tut_y0, Z_TUT - 1, tut_w, tut_h);
         }
         if (tut_state.indicator_name) {
-          indicator = indicator_pos[tut_state.indicator_name];
+          // must be a UI indicator, draw now
+          let indicator = indicator_pos[tut_state.indicator_name];
+          if (indicator) {
+            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+          }
         }
-        if (indicator) {
-          draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+        if (tut_state.indicator) {
+          let indicator = {
+            x: tut_state.indicator.x * TILE_SIZE + TILE_SIZE / 2,
+            y: tut_state.indicator.y * TILE_SIZE + 32,
+          };
+          // In-word indicator, draw after camera change.
+          tut_indicator = () => {
+            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+          };
         }
         if (tut_state.done && tut_state.done()) {
           dd.tutorial_state++;
@@ -2267,24 +2223,28 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     doPanning();
+    glov_camera.set2D(glov_camera.x0() - view_offset[0], glov_camera.y0() - view_offset[1], glov_camera.x1() - view_offset[0], glov_camera.y1() - view_offset[1]);
+    if (tut_indicator) {
+      tut_indicator();
+    }
 
     if (play_state === 'preview') {
       let pos;
-      if ((pos = input.clickHit(-Infinity, -Infinity, Infinity, Infinity))) {
+      if ((pos = glov_input.clickHit(-Infinity, -Infinity, Infinity, Infinity))) {
         floatTextUI(pos[0] - 80, pos[1] - 24, FLOATER_TIME_BUY, 'Cannot build during preview', font_style_buy);
       }
     }
 
-    draw_list.queue(sprites.background, -TILE_SIZE * 20 + view_offset[0], -TILE_SIZE * 20 + view_offset[1], 1, [1, 1, 1, 1]);
+    draw_list.queue(sprites.background, -TILE_SIZE * 20, -TILE_SIZE * 20, 1, [1, 1, 1, 1]);
     // darken out of bounds, if visible
     let darken_color = [0, 0, 0, 0.25];
-    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], -TILE_SIZE * 20 + view_offset[1], 1.5, darken_color,
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, -TILE_SIZE * 20, 1.5, darken_color,
       [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
-    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], dd.map[0].length * TILE_SIZE + view_offset[1], 1.5, darken_color,
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, dd.map[0].length * TILE_SIZE, 1.5, darken_color,
       [TILE_SIZE * (40 + dd.map.length), TILE_SIZE * 20, 1, 1]);
-    draw_list.queue(sprites.white, -TILE_SIZE * 20 + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
+    draw_list.queue(sprites.white, -TILE_SIZE * 20, 0, 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
-    draw_list.queue(sprites.white, dd.map.length * TILE_SIZE + view_offset[0], 0 + view_offset[1], 1.5, darken_color,
+    draw_list.queue(sprites.white, dd.map.length * TILE_SIZE, 0, 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     if (DEBUG) {
       // darken out-of-aspect
@@ -2299,13 +2259,13 @@ TurbulenzEngine.onload = function onloadFn()
         [extra, game_height, 1, 1]);
     }
     let eff_current_tile = current_tile;
-    if (input.isKeyDown(keyCodes.LEFT_SHIFT) || input.isKeyDown(keyCodes.RIGHT_SHIFT)) {
+    if (glov_input.isKeyDown(key_codes.LEFT_SHIFT) || glov_input.isKeyDown(key_codes.RIGHT_SHIFT)) {
       eff_current_tile = 'sell';
     }
     for (let ii = 0; ii < dd.map.length; ++ii) {
-      let x = ii * TILE_SIZE + view_offset[0];
+      let x = ii * TILE_SIZE;
       for (let jj = 0; jj < dd.map[ii].length; ++jj) {
-        let y = jj * TILE_SIZE + view_offset[1];
+        let y = jj * TILE_SIZE;
         let tile = dd.map[ii][jj];
         if (tile && tile.nodraw) {
           continue;
@@ -2315,7 +2275,7 @@ TurbulenzEngine.onload = function onloadFn()
         if (play_state === 'build') {
           if (tile && (tile.type === 'base' || tile.type === 'resource')) {
             // not sellable
-            if (input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+            if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
 
               let lines = [];
               if (tile.type === 'base') {
@@ -2325,7 +2285,7 @@ TurbulenzEngine.onload = function onloadFn()
                   'to earn money.'
                 ];
               } else {
-                if (input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+                if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                   show_recipes = !show_recipes;
                 }
                 lines = [
@@ -2360,15 +2320,15 @@ TurbulenzEngine.onload = function onloadFn()
                 let h = 8 + lines.length * TOOLTIP_FONT_SIZE + 8;
                 let tx = x + TILE_SIZE;
                 let ty0 = y;
-                if (ty0 + h > configureParams.viewportRectangle[3]) {
-                  ty0 = configureParams.viewportRectangle[3] - h;
+                if (ty0 + h > glov_camera.y1()) {
+                  ty0 = glov_camera.y1() - h;
                 }
                 let ty = ty0 + 8;
-                if (tx + TOOLTIP_W > configureParams.viewportRectangle[2]) {
+                if (tx + TOOLTIP_W > glov_camera.x1()) {
                   tx = x - TOOLTIP_W;
                 }
                 for (let ii = 0; ii < lines.length; ++ii) {
-                  default_font.drawSized(panel_font_style, tx + 16, ty, Z_UI + 3, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, lines[ii]);
+                  font.drawSized(panel_font_style, tx + 16, ty, Z_UI + 3, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, lines[ii]);
                   ty += TOOLTIP_FONT_SIZE;
                 }
                 ty += 8;
@@ -2378,10 +2338,10 @@ TurbulenzEngine.onload = function onloadFn()
           } else {
             if (tile) {
               let do_sell = false;
-              if (eff_current_tile === 'sell' && input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (eff_current_tile === 'sell' && glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 do_sell = true;
               }
-              if (input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size, 1)) {
+              if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size, 1)) {
                 do_sell = true;
               }
               if (do_sell) {
@@ -2394,7 +2354,7 @@ TurbulenzEngine.onload = function onloadFn()
               }
             }
             if (eff_current_tile === 'sell') {
-              if (input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 if (!tile) {
                   drawTile('sell', 0, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
                 } else {
@@ -2405,14 +2365,14 @@ TurbulenzEngine.onload = function onloadFn()
           }
           if (eff_current_tile !== 'sell') {
             if (dd.canPlaceTile(ii, jj, current_tile) || tile && tile.type === current_tile) {
-              if (input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 dd.buyTile(ii, jj, current_tile, current_direction);
                 if (tile && tile.type === current_tile) {
                   current_direction = tile.direction;
                 }
                 do_draw = false;
                 drawTile(current_tile, current_direction, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
-              } else if (input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              } else if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 let dir = current_direction;
                 if (tile && tile.type === current_tile) {
                   do_draw = false;
@@ -2591,38 +2551,28 @@ TurbulenzEngine.onload = function onloadFn()
       }
     }
 
-    for (let ii = floaters.length - 1; ii >= 0; --ii) {
-      let fl = floaters[ii];
-      fl.t += dt;
-      let y = fl.y - easeOut(fl.t / fl.time, 2) * FLOATER_DIST;
-      if (fl.t > fl.time) {
-        floaters[ii] = floaters[floaters.length - 1];
-        floaters.pop();
-      } else {
-        /*jshint bitwise:false*/
-        let a = Math.min(1, (2 - 2 * fl.t / fl.time)) * 255 | 0;
-        let style = glov_font.style(fl.style, {
-          color: fl.style.color & 0xFFFFFF00 | a,
-          outline_color: fl.style.outline_color & 0xFFFFFF00 | a,
-        });
-        default_font.drawSized(style, fl.x + (fl.is_ui ? 0 : view_offset[0]), y + (fl.is_ui ? 0 : view_offset[1]), fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
-      }
-    }
+    // game-camera floaters
+    drawFloaters(dt, false);
+    // UI floaters
+    glov_camera.set2DAspectFixed(game_width, game_height);
+    drawFloaters(dt, true);
   }
 
   function test(dt) {
+    const spriteSize = 64;
     if (!test.color_sprite) {
       test.color_sprite = color_white;
-      var spriteSize = 64;
       test.sprite = createSprite('test.png', {
         width : spriteSize,
         height : spriteSize,
-        x : (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5)),
-        y : (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5)),
         rotation : 0,
         color : test.color_sprite,
-        textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize)
+        textureRectangle : math_device.v4Build(0, 0, spriteSize, spriteSize)
       });
+      test.character = {
+        x : (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5)),
+        y : (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5)),
+      };
       test.game_bg = createSprite('white', {
         width : game_width,
         height : game_height,
@@ -2631,65 +2581,63 @@ TurbulenzEngine.onload = function onloadFn()
         rotation : 0,
         color : [0, 0.72, 1, 1],
         origin: [0, 0],
-        textureRectangle : mathDevice.v4Build(0, 0, spriteSize, spriteSize)
+        textureRectangle : math_device.v4Build(0, 0, spriteSize, spriteSize)
       });
     }
 
-    // test.sprite.x = (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5));
-    // test.sprite.y = (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5));
+    // test.character.x = (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5));
+    // test.character.y = (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5));
 
-    var character = {
-      dx: 0,
-      dy: 0,
-    };
-    if (input.isKeyDown(keyCodes.LEFT) || input.isKeyDown(keyCodes.A) || input.isPadButtonDown(0, padCodes.LEFT)) {
-      character.dx = -1;
-    } else if (input.isKeyDown(keyCodes.RIGHT) || input.isKeyDown(keyCodes.D) || input.isPadButtonDown(0, padCodes.RIGHT)) {
-      character.dx = 1;
+    test.character.dx = 0;
+    test.character.dy = 0;
+    if (glov_input.isKeyDown(key_codes.LEFT) || glov_input.isKeyDown(key_codes.A) || glov_input.isPadButtonDown(0, pad_codes.LEFT)) {
+      test.character.dx = -1;
+    } else if (glov_input.isKeyDown(key_codes.RIGHT) || glov_input.isKeyDown(key_codes.D) || glov_input.isPadButtonDown(0, pad_codes.RIGHT)) {
+      test.character.dx = 1;
     }
-    if (input.isKeyDown(keyCodes.UP) || input.isKeyDown(keyCodes.W) || input.isPadButtonDown(0, padCodes.UP)) {
-      character.dy = -1;
-    } else if (input.isKeyDown(keyCodes.DOWN) || input.isKeyDown(keyCodes.S) || input.isPadButtonDown(0, padCodes.DOWN)) {
-      character.dy = 1;
+    if (glov_input.isKeyDown(key_codes.UP) || glov_input.isKeyDown(key_codes.W) || glov_input.isPadButtonDown(0, pad_codes.UP)) {
+      test.character.dy = -1;
+    } else if (glov_input.isKeyDown(key_codes.DOWN) || glov_input.isKeyDown(key_codes.S) || glov_input.isPadButtonDown(0, pad_codes.DOWN)) {
+      test.character.dy = 1;
     }
 
-    test.sprite.x += character.dx * dt * 0.2;
-    test.sprite.y += character.dy * dt * 0.2;
-    if (input.isMouseDown() && input.isMouseOverSprite(test.sprite)) {
+    test.character.x += test.character.dx * dt * 0.2;
+    test.character.y += test.character.dy * dt * 0.2;
+    if (glov_input.isMouseDown() && glov_input.isMouseOver(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
       test.sprite.setColor(color_yellow);
-    } else if (input.clickHitSprite(test.sprite)) {
+    } else if (glov_input.clickHit(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
       test.color_sprite = (test.color_sprite === color_red) ? color_white : color_red;
       sound_manager.play('test');
-    } else if (input.isMouseOverSprite(test.sprite)) {
+    } else if (glov_input.isMouseOver(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
       test.color_sprite[3] = 0.5;
     } else {
       test.color_sprite[3] = 1;
     }
 
     draw_list.queue(test.game_bg, 0, 0, 1, [0, 0.72, 1, 1]);
-    draw_list.queue(test.sprite, test.sprite.x, test.sprite.y, 2, test.color_sprite);
+    draw_list.queue(test.sprite, test.character.x, test.character.y, 2, test.color_sprite);
 
     let font_test_idx = 0;
     let font_style = null;
 
-    default_font.drawSized(glov_font.styleColored(null, 0x000000ff), test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(glov_font.styleColored(null, 0x000000ff), test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'TEST!');
     font_style = glov_font.style(null, {
       color: 0xFF00FFff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'TEST2!');
     font_style = glov_font.style(null, {
       outline_width: 2.0,
       outline_color: 0x800080ff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'OUTLINE');
     font_style = glov_font.style(null, {
       outline_width: 2.0,
       outline_color: 0xFFFF00ff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'OUTLINE2');
     font_style = glov_font.style(null, {
       glow_xoffs: 3.25,
@@ -2698,7 +2646,7 @@ TurbulenzEngine.onload = function onloadFn()
       glow_outer: 5,
       glow_color: 0x000000ff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'Drop Shadow');
     font_style = glov_font.style(null, {
       glow_xoffs: 0,
@@ -2707,7 +2655,7 @@ TurbulenzEngine.onload = function onloadFn()
       glow_outer: 5,
       glow_color: 0xFFFFFFff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'Glow');
     font_style = glov_font.style(null, {
       outline_width: 1.0,
@@ -2718,15 +2666,15 @@ TurbulenzEngine.onload = function onloadFn()
       glow_outer: 5,
       glow_color: 0x000000ff,
     });
-    default_font.drawSized(font_style, test.sprite.x, test.sprite.y + (++font_test_idx * 20), 3, 24, 24,
+    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
       'Both');
   }
 
-  game_state = titleInit;
+  game_state = loadingInit;
 
   var last_tick = Date.now();
   function tick() {
-    if (!graphicsDevice.beginFrame()) {
+    if (!graphics_device.beginFrame()) {
       return;
     }
     var now = Date.now();
@@ -2734,29 +2682,17 @@ TurbulenzEngine.onload = function onloadFn()
     last_tick = now;
     global_timer += dt;
     sound_manager.tick();
-    input.tick();
+    glov_input.tick();
 
-    {
-      let screen_width = graphicsDevice.width;
-      let screen_height = graphicsDevice.height;
-      let screen_aspect = screen_width / screen_height;
-      let view_aspect = game_width / game_height;
-      if (screen_aspect > view_aspect) {
-        let viewport_width = game_height * screen_aspect;
-        let half_diff = (viewport_width - game_width) / 2;
-        configureParams.viewportRectangle = [-half_diff, 0, game_width + half_diff, game_height];
-      } else {
-        let viewport_height = game_width / screen_aspect;
-        let half_diff = (viewport_height - game_height) / 2;
-        configureParams.viewportRectangle = [0, -half_diff, game_width, game_height + half_diff];
-      }
-      draw2D.configure(configureParams);
-    }
+    glov_camera.tick();
+    glov_camera.set2DAspectFixed(game_width, game_height);
 
     if (window.need_repos) {
       --window.need_repos;
-      var ul = draw2D.viewportUnmap(0, 0);
-      var lr = draw2D.viewportUnmap(game_width-1, game_height-1);
+      var ul = [];
+      glov_camera.virtualToPhysical(ul, [0,0]);
+      var lr = [];
+      glov_camera.virtualToPhysical(lr, [game_width-1,game_height-1]);
       var viewport = [ul[0], ul[1], lr[0], lr[1]];
       var height = viewport[3] - viewport[1];
       // default font size of 16 when at height of game_height
@@ -2773,16 +2709,17 @@ TurbulenzEngine.onload = function onloadFn()
       });
     }
 
-    draw2D.setBackBuffer();
-    draw2D.clear([0, 0, 0, 1]);
+    draw_2d.setBackBuffer();
+    draw_2d.clear([0, 0, 0, 1]);
 
     game_state(dt);
 
     draw_list.draw();
 
-    graphicsDevice.endFrame();
-    input.endFrame();
+    graphics_device.endFrame();
+    glov_input.endFrame();
   }
 
-  intervalID = TurbulenzEngine.setInterval(tick, 1000/60);
+  loadingInit();
+  TurbulenzEngine.setInterval(tick, 1000/60);
 };

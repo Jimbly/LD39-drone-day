@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Drone Supervisor - Ludum Dare 39</title>
+    <title>Drone Supervisor - Ludum Dare 39 - Dashing Strike Games</title>
     <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1">
     <meta name="Description" content="Give orders to an army of drones in this free turn-based production-line building simulation browser game" />
     <script src="vendor/jquery-1.11.3.min.js"></script>
@@ -19,11 +19,20 @@
         </a>
       </canvas>
       <div id="gamescreen" class="screenwrap">
+        <div id="loading" class="screen vflex" style="display: none;">
+          <div class="flexcenter" style="text-align: center;">
+            <h1>Drone Supervisor</h1>
+          </div>
+          <div class="flexcenter" style="flex:3; text-align: center;" id="loading">
+            Loading...
+          </div>
+        </div>
         <div id="title" class="screen vflex" style="display: none;">
           <div class="flexcenter" style="text-align: center;">
             <h1>Drone Supervisor</h1>
           </div>
-          <div class="flexcenter" style="flex:3; text-align: center;"></div>
+          <div class="flexcenter" style="flex:3; text-align: center;">
+          </div>
         </div>
         <div id="scores" class="screen vflex" style="display: none;">
           <div class="flexcenter" style="text-align: center;">

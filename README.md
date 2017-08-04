@@ -51,17 +51,6 @@ UI:
 * tooltips on resources, show immediate recipes
   * same when running with resources being carried
 
-Level:
-  * (Random?) resource distribution
-  * Ship/Base in center
-
-Game loop:
-  * Setup
-    * Place nodes
-    * Buy upgrades (can undo anything back to previous loop)
-    * Preview
-  * Execute, gain resources, consume time
-
 Goal (in fewest loops):
   * Total resource amount
   * Visible node off-screen you want to get to? (Requires total resource amount for appropriate upgrades, though clever layout could do it cheaper?)
@@ -92,7 +81,3 @@ Generated nodes:
 * obstacles?
   * blocking obstacles - drones just stop
   * death obstacles - drones fall in, die, generate negative income
-
-
-Engine tweaks:
-  * Move view_origin into a camera module, have input and draw_list respect it

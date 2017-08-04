@@ -5,7 +5,7 @@
 class GlovSpriteManager {
   constructor(graphicsDevice) {
     const requestHandler = RequestHandler.create({});
-    this.textureManager = TextureManager.create(graphicsDevice, requestHandler);
+    this.texture_manager = TextureManager.create(graphicsDevice, requestHandler);
     this.textures = {};
   }
 
@@ -14,12 +14,12 @@ class GlovSpriteManager {
     if (texname.indexOf('.') !== -1) {
       path = 'img/'+ texname;
     }
-    const inst = this.textureManager.getInstance(path);
+    const inst = this.texture_manager.getInstance(path);
     if (inst) {
       return inst;
     }
-    this.textures[texname] = this.textureManager.load(path, false);
-    return this.textureManager.getInstance(path);
+    this.textures[texname] = this.texture_manager.load(path, false);
+    return this.texture_manager.getInstance(path);
   }
   createSprite(texname, params) {
     const tex_inst = this.loadTexture(texname);
@@ -31,6 +31,9 @@ class GlovSpriteManager {
     return sprite;
   }
 
+  loading() {
+    return this.texture_manager.getNumPendingTextures();
+  }
 }
 
 export function create(graphicsDevice) {
