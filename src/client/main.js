@@ -27,7 +27,10 @@ TurbulenzEngine.onload = function onloadFn()
   draw_list.setDefaultBucket('alpha_nearest');
 
   const sound_manager = require('./glov/sound_manager.js').create();
-  sound_manager.loadSound('test');
+  sound_manager.use_oggs = true;
+  sound_manager.loadSound('music1');
+  sound_manager.loadSound('music2');
+  const MUSIC_VOLUME = 0.4;
 
   function loadTexture(texname) {
     return glov_sprite.loadTexture(texname);
@@ -137,7 +140,7 @@ TurbulenzEngine.onload = function onloadFn()
 
   function loading() {
     let load_count = glov_sprite.loading() + sound_manager.loading();
-    $('#loading').text(`Loading (${load_count})...`);
+    $('#loading_text').text(`Loading (${load_count})...`);
     if (!load_count) {
       game_state = playInit;
     }
@@ -146,7 +149,7 @@ TurbulenzEngine.onload = function onloadFn()
   function loadingInit() {
     initGraphics();
     $('.screen').hide();
-    $('#title').show();
+    $('#loading').show();
     game_state = loading;
     loading();
   }
@@ -1053,6 +1056,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     resetActors() {
+      sound_manager.playLooping('music1', MUSIC_VOLUME);
       this.goal_reached = false;
       this.resource_transfers = [];
       this.craftings = [];
@@ -1525,6 +1529,7 @@ TurbulenzEngine.onload = function onloadFn()
 
 
   function previewStart() {
+    sound_manager.playLooping('music2', MUSIC_VOLUME);
     play_state = 'preview';
     tick_time = ADVANCE_SPEED;
     tick_countdown = 0.01;

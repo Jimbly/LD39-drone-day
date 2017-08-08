@@ -20,6 +20,7 @@ class SoundManager {
     };
     this.soundDevice = TurbulenzEngine.createSoundDevice(soundDeviceParameters);
     this.soundDevice.listenerTransform = listenerTransform;
+    this.use_oggs = false; // set to true if .ogg versions of all sounds are available
 
     this.channels = [];
     for (let ii = 0; ii < 16; ++ii) {
@@ -33,6 +34,7 @@ class SoundManager {
     this.last_played = {};
     this.global_timer = Date.now();
 
+    this.current_loop = null;
     this.sound_loop = this.soundDevice.createSource({
       position : [0, 0, 0],
       relative : false,
@@ -49,11 +51,11 @@ class SoundManager {
       return;
     }
     let src = 'sounds/' + base;
-    // if (this.soundDevice.isSupported('FILEFORMAT_WAV')) {
-    src += '.wav';
-    // } else {
-    //   src += '.ogg';
-    // }
+    if (this.soundDevice.isSupported('FILEFORMAT_WAV') || !this.use_oggs) {
+      src += '.wav';
+    } else {
+      src += '.ogg';
+    }
     ++num_loading;
     this.soundDevice.createSound({
       src: src,
@@ -88,12 +90,17 @@ class SoundManager {
     }
   }
 
-  playLooping(soundname) {
+  playLooping(soundname, volume) {
+    volume = volume || 0;
     this.loadSound(soundname, () => {
       if (!sounds[soundname]) {
         return;
       }
-      this.sound_loop.play(sounds[soundname]);
+      if (this.current_loop !== soundname) {
+        this.current_loop = soundname;
+        this.sound_loop.play(sounds[soundname]);
+        this.sound_loop.gain = volume;
+      }
     });
   }
 

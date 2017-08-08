@@ -4,7 +4,6 @@
     <title>Drone Supervisor - Ludum Dare 39 - Dashing Strike Games</title>
     <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1">
     <meta name="Description" content="Give orders to an army of drones in this free turn-based production-line building simulation browser game" />
-    <script src="vendor/jquery-1.11.3.min.js"></script>
 
     <link rel="stylesheet" type="text/css" href="main.css">
   </head>
@@ -18,18 +17,26 @@
           Getting a WebGL Implementation
         </a>
       </canvas>
-      <div id="gamescreen" class="screenwrap">
-        <div id="loading" class="screen vflex" style="display: none;">
+      <div class="screenwrap">
+        <!-- Not doing font scaling on this div, since having it resize when the JS loads is annoying -->
+        <div id="loading" class="screen vflex">
+          <div class="flexcenter" style="flex:1; text-align: center;">
+          </div>
           <div class="flexcenter" style="text-align: center;">
+            <div style="padding-bottom: 20px;">
+              <img src="img/logo.png" style="width: 80%; height: auto;">
+            </div>
             <h1>Drone Supervisor</h1>
           </div>
-          <div class="flexcenter" style="flex:3; text-align: center;" id="loading">
+          <div class="flexcenter" style="flex:1; text-align: center;" id="loading_text">
             Loading...
           </div>
         </div>
+      </div>
+      <div id="gamescreen" class="screenwrap">
         <div id="title" class="screen vflex" style="display: none;">
           <div class="flexcenter" style="text-align: center;">
-            <h1>Drone Supervisor</h1>
+            <h1>Drone Supervisor Test</h1>
           </div>
           <div class="flexcenter" style="flex:3; text-align: center;">
           </div>
@@ -54,6 +61,8 @@
           <div class="flexcenter" style="flex:1; text-align: center;"></div>
         </div>
       </div>
+
+      <script src="vendor/jquery-1.11.3.min.js"></script>
       <script type="text/javascript">
         (function () {
           var debug = document.getElementById('debug');
