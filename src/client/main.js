@@ -484,6 +484,7 @@ TurbulenzEngine.onload = function onloadFn()
     loadSprite('base', 1, 1, BASE_SIZE, BASE_SIZE);
     loadSprite('craft2', 2, 2, 2, 2);
     loadSprite('craft3', 2, 2, 3, 3);
+    loadSprite('sound', 2, 2);
 
     sprites.panel = glov_ui.loadSpriteRect('panel.png', [2, 12, 2], [2, 12, 2]);
   }
@@ -1056,7 +1057,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     resetActors() {
-      sound_manager.playLooping('music1', MUSIC_VOLUME);
+      sound_manager.playMusic('music1', MUSIC_VOLUME, sound_manager.FADE);
       this.goal_reached = false;
       this.resource_transfers = [];
       this.craftings = [];
@@ -1529,7 +1530,7 @@ TurbulenzEngine.onload = function onloadFn()
 
 
   function previewStart() {
-    sound_manager.playLooping('music2', MUSIC_VOLUME);
+    sound_manager.playMusic('music2', MUSIC_VOLUME, sound_manager.FADE_OUT);
     play_state = 'preview';
     tick_time = ADVANCE_SPEED;
     tick_countdown = 0.01;
@@ -2099,6 +2100,16 @@ TurbulenzEngine.onload = function onloadFn()
           play_state = 'build';
         }
         y += BUTTON_H;
+      }
+
+      if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+        sprites.sound, sprites.sound.rects[sound_manager.music_on ? 0 : 2])) {
+        sound_manager.music_on = !sound_manager.music_on;
+      }
+
+      if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H - 4 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+        sprites.sound, sprites.sound.rects[sound_manager.sound_on ? 1 : 3])) {
+        sound_manager.sound_on = !sound_manager.sound_on;
       }
 
       y += 8;
@@ -2688,7 +2699,7 @@ TurbulenzEngine.onload = function onloadFn()
     var dt = Math.min(Math.max(now - last_tick, 1), 250);
     last_tick = now;
     global_timer += dt;
-    sound_manager.tick();
+    sound_manager.tick(dt);
     glov_input.tick();
 
     glov_camera.tick();
