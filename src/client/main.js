@@ -27,9 +27,17 @@ TurbulenzEngine.onload = function onloadFn()
   draw_list.setDefaultBucket('alpha_nearest');
 
   const sound_manager = require('./glov/sound_manager.js').create();
-  sound_manager.use_oggs = true;
+  //sound_manager.use_oggs = true;
   sound_manager.loadSound('music1');
   sound_manager.loadSound('music2');
+  sound_manager.loadSound('sell');
+  sound_manager.loadSound('place_good');
+  sound_manager.loadSound('place_error');
+  sound_manager.loadSound('place_rotate');
+  sound_manager.loadSound('tick_sell');
+  sound_manager.loadSound('tick_pickup');
+  sound_manager.loadSound('tick_dropoff');
+  sound_manager.loadSound('tick_craft');
   const MUSIC_VOLUME = 0.4;
 
   function loadTexture(texname) {
@@ -42,6 +50,10 @@ TurbulenzEngine.onload = function onloadFn()
   const arial32_info = require('./img/font/arial32.json');
   const font = glov_font.create(draw_list, arial32_info, loadTexture('arial32.png'));
   const glov_ui = require('./glov/ui.js').create(glov_sprite, glov_input, font, draw_list);
+  glov_ui.bindSounds(sound_manager, {
+    button_click: 'button_click',
+    button_over: 'button_over',
+  });
 
   // Preload
   loadTexture('arrows.png');
@@ -1005,6 +1017,7 @@ TurbulenzEngine.onload = function onloadFn()
         !tutorial_states[this.tutorial_state].buy_validate ||
         !tutorial_states[this.tutorial_state].buy_validate(x, y, tile_type, dir)
       )) {
+        sound_manager.play('place_error');
         floatText(x, y, 2000, 'Invalid (please follow directions)', font_style_buy);
         return;
       }
@@ -1025,18 +1038,22 @@ TurbulenzEngine.onload = function onloadFn()
             }
           }
           dmoney = this.costOf(old_type, 1);
+          sound_manager.play('sell');
         }
       } else {
         if (tile && tile.type === tile_type) {
           // just rotate
           tile.direction = (tile.direction + 1) % 4;
+          sound_manager.play('place_rotate');
         } else {
           dmoney = -this.costOf(tile_type, 1);
           if (-dmoney > this.money) {
+            sound_manager.play('place_error');
             floatText(x, y, FLOATER_TIME_BUY, `Cannot afford \$${-dmoney}`, font_style_buy);
             dmoney = 0;
           } else {
             // place new tile(s)
+            sound_manager.play('place_good');
             let size = tile_type_size[tile_type] || 1;
             for (let ii = 0; ii < size; ++ii) {
               for (let jj = 0; jj < size; ++jj) {
@@ -1054,6 +1071,14 @@ TurbulenzEngine.onload = function onloadFn()
         floatText(x, y, FLOATER_TIME_BUY, `${(dmoney < 0) ? '-' : '+'}\$${Math.abs(dmoney)}`, (dmoney > 0) ? font_style_sale : font_style_buy);
         this.money += dmoney;
       }
+    }
+
+    playTickSound(name) {
+      if (this.tick_sounds[name]) {
+        return;
+      }
+      this.tick_sounds[name] = true;
+      sound_manager.play('tick_' + name);
     }
 
     resetActors() {
@@ -1161,6 +1186,7 @@ TurbulenzEngine.onload = function onloadFn()
           this.resource_transfers.push([tile.resource, ticker.x, ticker.y, target_x, target_y]);
           target_actor.gain_resource_tick = this.tick_id;
           --tile.quantity;
+          this.playTickSound('pickup');
           if (!tile.quantity) {
             break;
           }
@@ -1181,6 +1207,8 @@ TurbulenzEngine.onload = function onloadFn()
             tile.contents[ii] = null;
             floatText((ticker.x + base_contents_coords[ii][0]), (ticker.y + base_contents_coords[ii][1]),
               FLOATER_TIME_BASE_SALE, `${resource_types[res].type}: +\$${resource_value}`, font_style_sale);
+            this.playTickSound('sell');
+
             if (this.ld.goal[0] === 'sell' && this.ld.goal[1] === resource_types[res].type) {
               this.goal_reached = true;
             }
@@ -1210,6 +1238,7 @@ TurbulenzEngine.onload = function onloadFn()
             ticker.x + base_contents_coords[target_contents][0], ticker.y + base_contents_coords[target_contents][1]]);
           target_actor.carrying = null;
           target_actor.gain_resource_tick = this.tick_id;
+          this.playTickSound('dropoff');
         }
       }
     }
@@ -1230,6 +1259,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
         if (full) {
           // craft!
+          this.playTickSound('craft');
           let ingred = tile.contents.slice(index0);
           let res = craftResult(ingred);
           let message = [];
@@ -1288,12 +1318,14 @@ TurbulenzEngine.onload = function onloadFn()
         let target_content_y = ticker.y + contents_coords[slurp_coords[jj][2]][1];
         if (is_out && !target_actor.carrying) {
           // output
+          this.playTickSound('pickup');
           target_actor.carrying = tile.contents[target_contents];
           this.resource_transfers.push([target_actor.carrying, target_content_x, target_content_y, target_x, target_y]);
           target_actor.gain_resource_tick = this.tick_id;
           tile.contents[target_contents] = null;
         } else if (!is_out && target_actor.carrying) {
           // input
+          this.playTickSound('dropoff');
           tile.contents = tile.contents || [];
           tile.contents[target_contents] = target_actor.carrying;
           this.resource_transfers.push([target_actor.carrying, target_x, target_y, target_content_x, target_content_y]);
@@ -1398,6 +1430,7 @@ TurbulenzEngine.onload = function onloadFn()
 
     tick() {
       ++this.tick_id;
+      this.tick_sounds = {};
       this.resource_transfers = [];
       this.craftings = [];
       for (let ii = 0; ii < this.busy.length; ++ii) {
@@ -2264,18 +2297,6 @@ TurbulenzEngine.onload = function onloadFn()
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
     draw_list.queue(sprites.white, dd.map.length * TILE_SIZE, 0, 1.5, darken_color,
       [TILE_SIZE * 20, TILE_SIZE * dd.map[0].length, 1, 1]);
-    if (DEBUG) {
-      // darken out-of-aspect
-      const extra = 1000;
-      draw_list.queue(sprites.white, -extra, -extra, 1.75, [1, 0, 0, 0.5],
-        [game_width + extra, extra, 1, 1]);
-      draw_list.queue(sprites.white, -extra, game_height, 1.75, [1, 0, 0, 0.5],
-        [game_width + extra, extra, 1, 1]);
-      draw_list.queue(sprites.white, -extra, 0, 1.75, [1, 0, 0, 0.5],
-        [extra, game_height, 1, 1]);
-      draw_list.queue(sprites.white, game_width, 0, 1.75, [1, 0, 0, 0.5],
-        [extra, game_height, 1, 1]);
-    }
     let eff_current_tile = current_tile;
     if (glov_input.isKeyDown(key_codes.LEFT_SHIFT) || glov_input.isKeyDown(key_codes.RIGHT_SHIFT)) {
       eff_current_tile = 'sell';
@@ -2304,6 +2325,7 @@ TurbulenzEngine.onload = function onloadFn()
                 ];
               } else {
                 if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+                  glov_ui.playUISound('button_click');
                   show_recipes = !show_recipes;
                 }
                 lines = [
@@ -2574,6 +2596,19 @@ TurbulenzEngine.onload = function onloadFn()
     // UI floaters
     glov_camera.set2DAspectFixed(game_width, game_height);
     drawFloaters(dt, true);
+    if (DEBUG) {
+      // darken out-of-aspect
+      const extra = 1000;
+      draw_list.queue(sprites.white, -extra, -extra, 1.75, [1, 0, 0, 0.5],
+        [game_width + extra, extra, 1, 1]);
+      draw_list.queue(sprites.white, -extra, game_height, 1.75, [1, 0, 0, 0.5],
+        [game_width + extra, extra, 1, 1]);
+      draw_list.queue(sprites.white, -extra, 0, 1.75, [1, 0, 0, 0.5],
+        [extra, game_height, 1, 1]);
+      draw_list.queue(sprites.white, game_width, 0, 1.75, [1, 0, 0, 0.5],
+        [extra, game_height, 1, 1]);
+    }
+
   }
 
   function test(dt) {
@@ -2701,6 +2736,7 @@ TurbulenzEngine.onload = function onloadFn()
     global_timer += dt;
     sound_manager.tick(dt);
     glov_input.tick();
+    glov_ui.tick();
 
     glov_camera.tick();
     glov_camera.set2DAspectFixed(game_width, game_height);

@@ -65,6 +65,20 @@ class GlovUI {
 
     let sprites = this.sprites = {};
     sprites.button = this.loadSpriteRect('button.png', [4, 5, 4], [13]);
+    this.sounds = {};
+
+    this.button_mouseover = false; // for callers to poll the very last button
+    // For tracking global mouseover state
+    this.last_frame_button_mouseover = false;
+    this.frame_button_mouseover = false;
+  }
+
+  bindSounds(sound_manager, sounds) {
+    this.sound_manager = sound_manager;
+    this.sounds = sounds;
+    for (let key in sounds) {
+      sound_manager.loadSound(sounds[key]);
+    }
   }
 
   drawHBox(s, x, y, z, w, h, color) {
@@ -102,16 +116,31 @@ class GlovUI {
     }
   }
 
-  buttonShared(x, y, w, h) {
+  playUISound(name) {
+    if (this.sounds[name]) {
+      this.sound_manager.play(this.sounds[name]);
+    }
+  }
+
+  setMouseOver(key) {
+    if (this.last_frame_button_mouseover !== key && this.frame_button_mouseover !== key) {
+      this.playUISound('button_over');
+    }
+    this.frame_button_mouseover = key;
+    this.button_mouseover = true;
+  }
+
+  buttonShared(x, y, w, h, key) {
     let color = this.color_white;
     let ret = false;
     this.button_mouseover = false;
     if (this.glov_input.clickHit(x, y, w, h)) {
-      this.button_mouseover = true;
+      this.setMouseOver(key);
       color = this.color_click;
       ret = true;
+      this.playUISound('button_click');
     } else if (this.glov_input.isMouseOver(x, y, w, h)) {
-      this.button_mouseover = true;
+      this.setMouseOver(key);
       color = this.glov_input.isMouseDown() ? this.color_click : this.color_rollover;
     } else {
       this.button_mouseover = false;
@@ -120,7 +149,7 @@ class GlovUI {
   }
 
   buttonText(x, y, z, w, h, text) {
-    let shared = this.buttonShared(x, y, w, h);
+    let shared = this.buttonShared(x, y, w, h, text);
 
     this.drawHBox(this.sprites.button, x, y, z, w, h, shared.color);
     let font_h = h * 0.70;
@@ -131,7 +160,7 @@ class GlovUI {
   }
 
   buttonImage(x, y, z, w, h, img, img_rect) {
-    let shared = this.buttonShared(x, y, w, h);
+    let shared = this.buttonShared(x, y, w, h, img);
 
     this.drawHBox(this.sprites.button, x, y, z, w, h, shared.color);
     let img_w = img.getWidth();
@@ -145,6 +174,10 @@ class GlovUI {
     return shared.ret;
   }
 
+  tick() {
+    this.last_frame_button_mouseover = this.frame_button_mouseover;
+    this.frame_button_mouseover = false;
+  }
 }
 
 export function create() {
