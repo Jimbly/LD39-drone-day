@@ -1965,6 +1965,9 @@ TurbulenzEngine.onload = function onloadFn()
                   'Undo your previous',
                   'action (including End',
                   'Turn).',
+                  '',
+                  'Hold SHIFT to Save',
+                  'State.',
                 ]
               );
             }
