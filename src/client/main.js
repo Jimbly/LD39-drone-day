@@ -6,7 +6,7 @@
 /*global math_device: false */
 /*global assert: false */
 
-const DEBUG = false;
+const DEBUG = false && window.location.host.indexOf('localhost') !== -1;
 
 TurbulenzEngine.onload = function onloadFn()
 {
@@ -496,7 +496,7 @@ TurbulenzEngine.onload = function onloadFn()
     loadSprite('base', 1, 1, BASE_SIZE, BASE_SIZE);
     loadSprite('craft2', 2, 2, 2, 2);
     loadSprite('craft3', 2, 2, 3, 3);
-    loadSprite('sound', 2, 3);
+    loadSprite('sound', 2, 4);
 
     sprites.panel = glov_ui.loadSpriteRect('panel.png', [2, 12, 2], [2, 12, 2]);
   }
@@ -937,12 +937,14 @@ TurbulenzEngine.onload = function onloadFn()
       }
       this.history = [];
       this.history_pos = null;
+      this.saved_state = null;
       this.resetActors();
     }
 
     constructor() {
       this.history = [];
       this.history_pos = null; // points to the current state, or null if just the most recent pushed
+      this.saved_state = null;
       this.tick_id = 0;
       this.turn = -1;
       this.max_power = -1;
@@ -1023,6 +1025,27 @@ TurbulenzEngine.onload = function onloadFn()
       let old_state = this.history[this.history_pos];
       assert(old_state);
       this.fromJSON(JSON.parse(this.history[this.history_pos]));
+    }
+
+    canLoad() {
+      return !!this.saved_state;
+    }
+    canSave() {
+      return true;
+    }
+    load() {
+      if (!this.canLoad()) {
+        return;
+      }
+      this.fromJSON(JSON.parse(this.saved_state.state));
+      this.saveState();
+    }
+    save() {
+      this.saved_state = {
+        // history: this.history.slice(0),
+        // history_pos: this.history_pos,
+        state: JSON.stringify(this),
+      };
     }
 
     upgradeCost(type, delta) {
@@ -1875,16 +1898,78 @@ TurbulenzEngine.onload = function onloadFn()
       }
 
       if (!dd.tutorial_state) {
-        if (dd.canRedo() && glov_ui.buttonImage(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
-          sprites.sound, sprites.sound.rects[5])
-        ) {
-          dd.redo();
-        }
+        if (glov_input.isKeyDown(key_codes.LEFT_SHIFT) || glov_input.isKeyDown(key_codes.RIGHT_SHIFT)) {
+          // do save/load
+          if (dd.canLoad()) {
+            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+              sprites.sound, sprites.sound.rects[7])
+            ) {
+              dd.load();
+            }
+            if (glov_ui.button_mouseover) {
+              tooltipOver(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H,
+                [
+                  'Restore previously',
+                  'saved state.',
+                ]
+              );
+            }
+          }
 
-        if (dd.canUndo() && glov_ui.buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
-          sprites.sound, sprites.sound.rects[4])
-        ) {
-          dd.undo();
+          if (dd.canSave()) {
+            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+              sprites.sound, sprites.sound.rects[6])
+            ) {
+              dd.save();
+            }
+            if (glov_ui.button_mouseover) {
+              tooltipOver(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H,
+                [
+                  'Save current state',
+                  'for later restoring.',
+                  'Note: Only saved during',
+                  'this session, and only',
+                  'one save slot.',
+                ]
+              );
+            }
+          }
+
+        } else {
+          if (dd.canRedo()) {
+            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+              sprites.sound, sprites.sound.rects[5])
+            ) {
+              dd.redo();
+            }
+            if (glov_ui.button_mouseover) {
+              tooltipOver(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H,
+                [
+                  'Redo what you just',
+                  'undid.  Make up your',
+                  'mind already!',
+                ]
+              );
+            }
+          }
+
+          if (dd.canUndo()) {
+            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+              sprites.sound, sprites.sound.rects[4])
+            ) {
+              dd.undo();
+            }
+            if (glov_ui.button_mouseover) {
+              tooltipOver(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H,
+                [
+                  'Undo your previous',
+                  'action (including End',
+                  'Turn).',
+                ]
+              );
+            }
+          }
+
         }
       }
 
