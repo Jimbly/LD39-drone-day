@@ -7,6 +7,7 @@
 /*global assert: false */
 
 const DEBUG = false && window.location.host.indexOf('localhost') !== -1;
+const COMPO_VERSION = false;
 
 TurbulenzEngine.onload = function onloadFn()
 {
@@ -28,16 +29,18 @@ TurbulenzEngine.onload = function onloadFn()
 
   const sound_manager = require('./glov/sound_manager.js').create();
   //sound_manager.use_oggs = true;
-  sound_manager.loadSound('music1');
-  sound_manager.loadSound('music2');
-  sound_manager.loadSound('sell');
-  sound_manager.loadSound('place_good');
-  sound_manager.loadSound('place_error');
-  sound_manager.loadSound('place_rotate');
-  sound_manager.loadSound('tick_sell');
-  sound_manager.loadSound('tick_pickup');
-  sound_manager.loadSound('tick_dropoff');
-  sound_manager.loadSound('tick_craft');
+  if (!COMPO_VERSION) {
+    sound_manager.loadSound('music1');
+    sound_manager.loadSound('music2');
+    sound_manager.loadSound('sell');
+    sound_manager.loadSound('place_good');
+    sound_manager.loadSound('place_error');
+    sound_manager.loadSound('place_rotate');
+    sound_manager.loadSound('tick_sell');
+    sound_manager.loadSound('tick_pickup');
+    sound_manager.loadSound('tick_dropoff');
+    sound_manager.loadSound('tick_craft');
+  }
   const MUSIC_VOLUME = DEBUG ? 0 : 0.2;
 
   function loadTexture(texname) {
@@ -50,10 +53,12 @@ TurbulenzEngine.onload = function onloadFn()
   const arial32_info = require('./img/font/arial32.json');
   const font = glov_font.create(draw_list, arial32_info, loadTexture('arial32.png'));
   const glov_ui = require('./glov/ui.js').create(glov_sprite, glov_input, font, draw_list);
-  glov_ui.bindSounds(sound_manager, {
-    button_click: 'button_click',
-    button_over: 'button_over',
-  });
+  if (!COMPO_VERSION) {
+    glov_ui.bindSounds(sound_manager, {
+      button_click: 'button_click',
+      button_over: 'button_over',
+    });
+  }
 
   // Preload
   loadTexture('arrows.png');
@@ -991,6 +996,9 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     canUndo() {
+      if (COMPO_VERSION) {
+        return false;
+      }
       if (this.history.length <= 1) {
         return false;
       }
@@ -1009,6 +1017,9 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     canRedo() {
+      if (COMPO_VERSION) {
+        return false;
+      }
       return this.history_pos !== null && this.history_pos < this.history.length - 1;
     }
     redo() {
@@ -1028,9 +1039,15 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     canLoad() {
+      if (COMPO_VERSION) {
+        return false;
+      }
       return !!this.saved_state;
     }
     canSave() {
+      if (COMPO_VERSION) {
+        return false;
+      }
       return true;
     }
     load() {
@@ -1188,7 +1205,9 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     resetActors() {
-      sound_manager.playMusic('music1', MUSIC_VOLUME, sound_manager.FADE);
+      if (!COMPO_VERSION) {
+        sound_manager.playMusic('music1', MUSIC_VOLUME, sound_manager.FADE);
+      }
       this.goal_reached = false;
       this.resource_transfers = [];
       this.craftings = [];
@@ -1635,12 +1654,6 @@ TurbulenzEngine.onload = function onloadFn()
       // dd.buyTile(8, 10, 'drone', 0);
 
       // previewStart();
-    } else {
-      dd.buyTile(7, 7, 'drone', 0);
-      dd.buyTile(7, 6, 'arrow', 1);
-      dd.buyTile(8, 6, 'arrow', 3);
-
-      dd.buyTile(9, 3, 'drone', 2);
     }
 
     play(dt);
@@ -1670,7 +1683,9 @@ TurbulenzEngine.onload = function onloadFn()
 
 
   function previewStart() {
-    sound_manager.playMusic('music2', MUSIC_VOLUME, sound_manager.FADE_OUT);
+    if (!COMPO_VERSION) {
+      sound_manager.playMusic('music2', MUSIC_VOLUME, sound_manager.FADE_OUT);
+    }
     play_state = 'preview';
     tick_time = ADVANCE_SPEED;
     tick_countdown = 0.01;
@@ -2323,14 +2338,16 @@ TurbulenzEngine.onload = function onloadFn()
         y += BUTTON_H;
       }
 
-      if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
-        sprites.sound, sprites.sound.rects[sound_manager.music_on ? 0 : 2])) {
-        sound_manager.music_on = !sound_manager.music_on;
-      }
+      if (!COMPO_VERSION) {
+        if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+          sprites.sound, sprites.sound.rects[sound_manager.music_on ? 0 : 2])) {
+          sound_manager.music_on = !sound_manager.music_on;
+        }
 
-      if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H - 4 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
-        sprites.sound, sprites.sound.rects[sound_manager.sound_on ? 1 : 3])) {
-        sound_manager.sound_on = !sound_manager.sound_on;
+        if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H - 4 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+          sprites.sound, sprites.sound.rects[sound_manager.sound_on ? 1 : 3])) {
+          sound_manager.sound_on = !sound_manager.sound_on;
+        }
       }
 
       y += 8;
@@ -2922,12 +2939,12 @@ TurbulenzEngine.onload = function onloadFn()
     var dt = Math.min(Math.max(now - last_tick, 1), 250);
     last_tick = now;
     global_timer += dt;
-    sound_manager.tick(dt);
-    glov_input.tick();
-    glov_ui.tick();
 
     glov_camera.tick();
     glov_camera.set2DAspectFixed(game_width, game_height);
+    sound_manager.tick(dt);
+    glov_input.tick();
+    glov_ui.tick();
 
     if (window.need_repos) {
       --window.need_repos;
