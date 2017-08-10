@@ -6,7 +6,7 @@
 /*global math_device: false */
 /*global assert: false */
 
-const DEBUG = true;
+const DEBUG = false;
 
 TurbulenzEngine.onload = function onloadFn()
 {
