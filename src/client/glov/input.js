@@ -70,6 +70,13 @@ class GlovInput {
     this.clicks = [];
   }
 
+  eatAllInput() {
+    // destroy clicks, remove all down and up edges
+    this.endFrame();
+    this.touch_state = [];
+    this.mouse_over_captured = true;
+  }
+
   onMouseDown(mousecode, x, y) {
     this.onMouseOver(x, y); // update this.mouse_pos
     this.mouse_down[mousecode] = true;

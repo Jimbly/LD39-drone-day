@@ -87,6 +87,7 @@ TurbulenzEngine.onload = function onloadFn()
   let sprites = {};
   let global_timer = 0;
   let game_state;
+  let modal_dialog;
 
   function updateScoresDisplay(level_name) {
     let scores = score.high_scores[level_name];
@@ -435,6 +436,7 @@ TurbulenzEngine.onload = function onloadFn()
   const Z_UI = 100;
   const Z_TUT = 150;
   const Z_FLOAT = 200;
+  const Z_MODAL = 1000;
   let view_offset = [100,100];
 
   const BASE_SIZE = 3;
@@ -774,7 +776,7 @@ TurbulenzEngine.onload = function onloadFn()
   };
 
   let level_defs = [];
-  if (DEBUG && false) {
+  if (DEBUG && true) {
     level_defs.push({
       name: 'test', seed: 'test', w: 9, h: 9,
       starting_max_power: 6,
@@ -876,6 +878,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
 
     startLevel(ld) {
+      this.goal_reached_persist = false;
       this.ld = ld;
       this.tutorial_state = ld.tut ? 1 : 0;
       if (ld.tut) {
@@ -953,6 +956,7 @@ TurbulenzEngine.onload = function onloadFn()
       this.tick_id = 0;
       this.turn = -1;
       this.max_power = -1;
+      this.goal_reached_persist = false;
       this.allocLevel(3,3);
       this.resetActors();
     }
@@ -1611,7 +1615,7 @@ TurbulenzEngine.onload = function onloadFn()
     dd = new DroneDayState();
     current_direction = 2;
     if (DEBUG) {
-      dd.startLevel(level_defs[2]);
+      dd.startLevel(level_defs[0]);
       play_state = 'build';
     } else {
       play_state = 'menu';
@@ -1701,6 +1705,7 @@ TurbulenzEngine.onload = function onloadFn()
     if (dd.goal_reached) {
       score.setScore(dd.ld, dd.turn, dd.netWorth());
       play_state = 'menu';
+      dd.goal_reached_persist = true;
     }
     dd.resetActors();
   }
@@ -2260,11 +2265,48 @@ TurbulenzEngine.onload = function onloadFn()
       y += SCORE_SIZE;
       let score_total = { turns: 0, net_worth: 0 };
       let all_done = true;
+      let doStartLevel = function(ld) {
+        dd.startLevel(ld);
+        play_state = 'build';
+      };
       for (let ii = 0; ii < level_defs.length; ++ii) {
         let ld = level_defs[ii];
         if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W, BUTTON_H, ld.name)) {
-          dd.startLevel(ld);
-          play_state = 'build';
+          if (!COMPO_VERSION && !dd.goal_reached_persist && dd.history.length > 1) {
+            // already have something in progress, prompt first!
+            modal_dialog = (function (ld) {
+              const MODAL_W = 600;
+              let pad = 16;
+              const text_w = MODAL_W - pad * 2;
+              let x = (game_width - MODAL_W) / 2;
+              const y0 = 200;
+              let y = y0 + pad;
+
+              y += font.drawSizedWrapped(panel_font_style, x + pad, y, Z_MODAL, text_w, 0, 32, 32,
+                'You have not completed the level you were working on.  Starting' +
+                ' a new level will lose your progress. If you choose No, select' +
+                ' Back from the Menu to return to your game.\n' +
+                '\n' +
+                'Discard progress and start a new level?');
+              y += pad;
+
+              if (glov_ui.buttonText(x + pad, y, Z_MODAL, BUTTON_W / 2, BUTTON_H, 'Yes')) {
+                doStartLevel(ld);
+                modal_dialog = null;
+              }
+
+              if (glov_ui.buttonText(x + MODAL_W - BUTTON_W / 2 - pad, y, Z_MODAL, BUTTON_W / 2, BUTTON_H, 'No')) {
+                modal_dialog = null;
+              }
+              y+= BUTTON_H;
+
+              y += pad * 2;
+
+              drawPanel(x, y0, Z_MODAL - 1, MODAL_W, y - y0);
+            }).bind(null, ld);
+          } else {
+            doStartLevel(ld);
+          }
         }
 
         // Score
@@ -2970,6 +3012,15 @@ TurbulenzEngine.onload = function onloadFn()
 
     draw_2d.setBackBuffer();
     draw_2d.clear([0, 0, 0, 1]);
+
+    if (modal_dialog) {
+      modal_dialog();
+      let darken_color = [0, 0, 0, 0.75];
+      draw_list.queue(sprites.white, glov_camera.x0(), glov_camera.y0(), Z_MODAL - 2, darken_color,
+        [glov_camera.x1() - glov_camera.x0(), glov_camera.y1() - glov_camera.y0(), 1, 1]);
+
+      glov_input.eatAllInput();
+    }
 
     game_state(dt);
 
