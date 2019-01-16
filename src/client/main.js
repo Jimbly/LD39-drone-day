@@ -136,8 +136,8 @@ export function main(canvas) {
   function buttonImage(x, y, z, w, h, img, img_rect) {
     return glov_ui.buttonImage({ x, y, z, w, h, img, img_rect });
   }
-  function clickHit(x, y, w, h) {
-    return glov_input.clickHit({ x, y, w, h });
+  function clickHit(x, y, w, h, button) {
+    return glov_input.clickHit({ x, y, w, h, button });
   }
   function isMouseOver(x, y, w, h) {
     return glov_input.isMouseOver({ x, y, w, h });
@@ -2241,13 +2241,22 @@ export function main(canvas) {
       // draw power bar
       const POWER_BAR_W = 100;
       const POWER_BAR_H = game_height - BUTTON_H * 2;
-      glov_ui.drawBox(sprites.panel, UI_RIGHT - POWER_BAR_W, BUTTON_H, Z_UI, POWER_BAR_W, POWER_BAR_H,
-        64, [0.5,0,0,1]);
+      glov_ui.drawBox({
+        x: UI_RIGHT - POWER_BAR_W,
+        y: BUTTON_H,
+        z: Z_UI,
+        w: POWER_BAR_W,
+        h: POWER_BAR_H,
+      }, sprites.panel, BUTTON_H / 13, [0.5,0,0,1]);
       const power_left = Math.max(0, (dd.power + easeIn(tick_countdown, 2)) / dd.max_power);
       if (power_left * POWER_BAR_H > 16) {
         let bar_y = BUTTON_H + POWER_BAR_H * (1 - power_left);
-        glov_ui.drawBox(sprites.panel, UI_RIGHT - POWER_BAR_W, bar_y, Z_UI + 1, POWER_BAR_W, POWER_BAR_H * power_left,
-          64, [0,1,0,1]);
+        glov_ui.drawBox({
+          x: UI_RIGHT - POWER_BAR_W,
+          y: bar_y,
+          z: Z_UI + 1,
+          w: POWER_BAR_W, h: POWER_BAR_H * power_left,
+        }, sprites.panel, BUTTON_H / 13, [0,1,0,1]);
         if (dd.power) {
           font.drawSizedAligned(null, UI_RIGHT - POWER_BAR_W, bar_y + 8, Z_UI + 2, 64, glov_font.ALIGN.HCENTER,
             POWER_BAR_W, 0, `${dd.power}`);
