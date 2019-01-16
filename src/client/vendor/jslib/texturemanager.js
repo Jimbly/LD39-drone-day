@@ -51,10 +51,10 @@ var TextureInstance = (function () {
         delete this.textureChangedObserver;
     };
 
-    TextureInstance.create = //
+    //
     // TextureInstance.create
     //
-    function (name, texture) {
+    TextureInstance.create = function (name, texture) {
         var textureInstance = new TextureInstance();
         textureInstance.name = name;
         textureInstance.texture = texture;
@@ -69,7 +69,6 @@ var TextureInstance = (function () {
 /**
 @class  Texture manager
 @private
-
 @since TurbulenzEngine 0.1.0
 */
 var TextureManager = (function () {
@@ -183,7 +182,7 @@ var TextureManager = (function () {
                         that.numLoadingTextures -= 1;
                     };
 
-                    var textureRequest = function textureRequestFn(url, onload/*, callContext */ ) {
+                    var textureRequest = function textureRequestFn(url, onload /*, callContext */ ) {
                         var texture = that.graphicsDevice.createTexture({
                             src: url,
                             mipmaps: mipmaps,
@@ -554,7 +553,7 @@ var TextureManager = (function () {
         this.graphicsDevice = null;
     };
 
-    TextureManager.create = /**
+    /**
     @constructs Constructs a TextureManager object.
     
     @param {GraphicsDevice} graphicsDevice Graphics device
@@ -563,11 +562,11 @@ var TextureManager = (function () {
     
     @return {TextureManager} object, null if failed
     */
-    function (graphicsDevice, requestHandler, dt, errorCallback, log) {
+    TextureManager.create = function (graphicsDevice, requestHandler, dt, errorCallback, log) {
         var textureManager = new TextureManager();
 
         if (!errorCallback) {
-            errorCallback = function (/* e */ ) {
+            errorCallback = function () {
             };
         }
 
@@ -587,23 +586,10 @@ var TextureManager = (function () {
                 mipmaps: true,
                 dynamic: false,
                 data: [
-                    255,
-                    20,
-                    147,
-                    255,
-                    255,
-                    0,
-                    0,
-                    255,
-                    255,
-                    255,
-                    255,
-                    255,
-                    255,
-                    20,
-                    147,
-                    255
-                ]
+                    255, 20, 147, 255,
+                    255, 0, 0, 255,
+                    255, 255, 255, 255,
+                    255, 20, 147, 255]
             });
             if (!defaultTexture) {
                 errorCallback("Default texture not created.");
@@ -697,23 +683,10 @@ var TextureManager = (function () {
             mipmaps: true,
             dynamic: false,
             data: [
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255,
-                255
-            ]
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                255, 255, 255, 255,
+                255, 255, 255, 255]
         });
 
         textureManager.addProceduralTexture({
@@ -726,23 +699,10 @@ var TextureManager = (function () {
             mipmaps: true,
             dynamic: false,
             data: [
-                0,
-                0,
-                0,
-                255,
-                0,
-                0,
-                0,
-                255,
-                0,
-                0,
-                0,
-                255,
-                0,
-                0,
-                0,
-                255
-            ]
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 0, 255,
+                0, 0, 0, 255]
         });
 
         textureManager.addProceduralTexture({
@@ -755,23 +715,10 @@ var TextureManager = (function () {
             mipmaps: true,
             dynamic: false,
             data: [
-                128,
-                128,
-                255,
-                255,
-                128,
-                128,
-                255,
-                255,
-                128,
-                128,
-                255,
-                255,
-                128,
-                128,
-                255,
-                255
-            ]
+                128, 128, 255, 255,
+                128, 128, 255, 255,
+                128, 128, 255, 255,
+                128, 128, 255, 255]
         });
 
         var abs = Math.abs;

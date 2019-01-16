@@ -1,5 +1,5 @@
 /*global TurbulenzEngine: true */
-/*global math_device: false */
+/*global VMath: false */
 /*global Camera: false */
 
 const DEFAULT_FADE_RATE = 0.001;
@@ -9,37 +9,30 @@ let num_loading = 0;
 class SoundManager {
   constructor(listenerTransform) {
     if (!listenerTransform) {
-      const camera = Camera.create(math_device);
-      const look_at_position = math_device.v3Build(0.0, 0.0, 0.0);
-      const worldUp = math_device.v3BuildYAxis();
-      const camera_position = math_device.v3Build(0.0, 0.0, 1.0);
+      const camera = Camera.create(VMath);
+      const look_at_position = VMath.v3Build(0.0, 0.0, 0.0);
+      const worldUp = VMath.v3BuildYAxis();
+      const camera_position = VMath.v3Build(0.0, 0.0, 1.0);
       camera.lookAt(look_at_position, worldUp, camera_position);
       camera.updateViewMatrix();
       listenerTransform = camera.matrix;
     }
     let soundDeviceParameters = {
-      linearDistance : false
+      linearDistance: false
     };
-    let soundDevice = this.soundDevice = TurbulenzEngine.createSoundDevice(soundDeviceParameters);
+    this.soundDevice = TurbulenzEngine.createSoundDevice(soundDeviceParameters);
     this.soundDevice.listenerTransform = listenerTransform;
-
-    window.document.body.addEventListener('click', function () {
-      soundDevice.resume();
-    });
-    window.document.body.addEventListener('keydown', function () {
-      soundDevice.resume();
-    });
-    
-    this.use_oggs = false; // set to true if .ogg versions of all sounds are available
+    this.auto_oggs = false; // try loading .ogg versions first, then fallback to .wav
+    this.auto_mp3s = false; // try loading .mp3 versions first, then fallback to .wav
     this.sound_on = true;
     this.music_on = true;
 
     this.channels = [];
     for (let ii = 0; ii < 16; ++ii) {
       this.channels[ii] = this.soundDevice.createSource({
-        position : [0, 0, 0],
-        relative : false,
-        pitch : 1.0,
+        position: [0, 0, 0],
+        relative: false,
+        pitch: 1.0,
       });
     }
     this.channel = 0;
@@ -53,9 +46,9 @@ class SoundManager {
     for (let ii = 0; ii < 2; ++ii) {
       this.music.push({
         source: this.soundDevice.createSource({
-          position : [0, 0, 0],
-          relative : false,
-          pitch : 1.0,
+          position: [0, 0, 0],
+          relative: false,
+          pitch: 1.0,
           looping: true,
         }),
         current_volume: 0,
@@ -71,25 +64,42 @@ class SoundManager {
       }
       return;
     }
-    let src = 'sounds/' + base;
-    if (this.soundDevice.isSupported('FILEFORMAT_WAV') || !this.use_oggs) {
-      src += '.wav';
-    } else {
-      src += '.ogg';
+    let key = base;
+    let m = base.match(/^(.*)\.(mp3|ogg|wav)$/u);
+    let preferred_ext;
+    if (m) {
+      base = m[1];
+      preferred_ext = m[2];
     }
-    ++num_loading;
-    this.soundDevice.createSound({
-      src: src,
-      onload: function (sound) {
-        --num_loading;
-        if (sound) {
-          sounds[base] = sound;
-          if (cb) {
-            cb();
+    let src = `sounds/${base}`;
+    let tryLoad = (ext) => {
+      ++num_loading;
+      this.soundDevice.createSound({
+        src: src + ext,
+        onload: function (sound) {
+          --num_loading;
+          if (sound) {
+            sounds[key] = sound;
+            if (cb) {
+              return cb();
+            }
+          } else {
+            // failed to load
+            if (ext === '.ogg' || ext === '.mp3') {
+              tryLoad('.wav');
+            }
           }
+          return null;
         }
-      }
-    });
+      });
+    };
+    if (this.soundDevice.isSupported('FILEFORMAT_OGG') && (this.auto_oggs || preferred_ext === 'ogg')) {
+      tryLoad('.ogg');
+    } else if (this.soundDevice.isSupported('FILEFORMAT_MP3') && (this.auto_mp3s || preferred_ext === 'mp3')) {
+      tryLoad('.mp3');
+    } else {
+      tryLoad('.wav');
+    }
   }
 
   tick(dt) {
@@ -101,38 +111,52 @@ class SoundManager {
         let delta = target - this.music[ii].current_volume;
         let fade_amt = Math.min(Math.abs(delta), max_fade);
         if (delta < 0) {
-          this.music[ii].current_volume = Math.max(target,  this.music[ii].current_volume - fade_amt);
+          this.music[ii].current_volume = Math.max(target, this.music[ii].current_volume - fade_amt);
         } else {
-          this.music[ii].current_volume = Math.min(target,  this.music[ii].current_volume + fade_amt);
+          this.music[ii].current_volume = Math.min(target, this.music[ii].current_volume + fade_amt);
         }
         this.music[ii].source.gain = this.music[ii].current_volume;
       }
     }
   }
 
-  play(soundname) {
+  resume() {
+    this.soundDevice.resume();
+  }
+
+  play(soundname, volume) {
+    volume = volume || 1;
     if (!this.sound_on) {
-      return;
+      return null;
     }
     if (!sounds[soundname]) {
-      return;
+      return null;
     }
     let last_played_time = this.last_played[soundname] || -9e9;
     if (this.global_timer - last_played_time < 45) {
-      return;
+      return null;
     }
-    this.channels[this.channel++].play(sounds[soundname]);
+    let channel = this.channels[this.channel++];
+    channel.play(sounds[soundname]);
+    channel.gain = volume;
     this.last_played[soundname] = this.global_timer;
     if (this.channel === this.channels.length) {
       this.channel = 0;
     }
+    return {
+      stop: function () {
+        channel.stop();
+      }
+    };
   }
 
   playMusic(soundname, volume, transition) {
     if (!this.music_on) {
       return;
     }
-    volume = volume || 0;
+    if (volume === undefined) {
+      volume = 1;
+    }
     transition = transition || SoundManager.DEFAULT;
     this.loadSound(soundname, () => {
       if (!sounds[soundname]) {
@@ -147,7 +171,7 @@ class SoundManager {
         return;
       }
       // fade out previous music, if any
-      /* jshint bitwise:false */
+      /* eslint-disable no-bitwise */
       if (this.music[0].current_volume) {
         if (transition & SoundManager.FADE_OUT) {
           // swap to position 1, start fadeout
@@ -166,10 +190,11 @@ class SoundManager {
         this.music[0].source.gain = this.music[0].current_volume = volume;
       }
       this.music[0].source.play(sounds[soundname], 0, true);
+      /* eslint-enable no-bitwise */
     });
   }
 
-  loading() {
+  loading() { // eslint-disable-line class-methods-use-this
     return num_loading;
   }
 

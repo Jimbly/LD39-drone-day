@@ -137,7 +137,7 @@ function babelBrfs(filename, opts) {
 
 (function () {
   const browserify_opts = {
-    entries: ['./src/client/main.js'],
+    entries: ['./src/client/wrapper.js'],
     cache: {}, // required for watchify
     packageCache: {}, // required for watchify
     debug: true,
@@ -158,7 +158,7 @@ function babelBrfs(filename, opts) {
       .bundle()
       // log errors if they happen
       .on('error', log.error.bind(log, 'Browserify Error'))
-      .pipe(source('main.bundle.js'))
+      .pipe(source('wrapper.bundle.js'))
       // optional, remove if you don't need to buffer file contents
       .pipe(buffer())
       // optional, remove if you dont want sourcemaps

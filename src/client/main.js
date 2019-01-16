@@ -1,34 +1,64 @@
-/*jshint browser:true, noempty:false*/
-
+/*eslint global-require:off, no-use-before-define:off, max-len:off, class-methods-use-this:off, no-bitwise:off*/
+/*global VMath: false */
 /*global $: false */
-/*global TurbulenzEngine: true */
-/*global Draw2D: false */
-/*global math_device: false */
-/*global assert: false */
 
 const DEBUG = false && window.location.host.indexOf('localhost') !== -1;
 const COMPO_VERSION = false;
 
-TurbulenzEngine.onload = function onloadFn()
-{
-  const graphics_device = TurbulenzEngine.createGraphicsDevice({});
-  window.math_device = window.math_device || TurbulenzEngine.createMathDevice({});
-  let draw2d_params = { graphicsDevice: graphics_device };
-  const glov_font = require('./glov/font.js');
-  glov_font.populateDraw2DParams(draw2d_params);
-  const draw_2d = Draw2D.create(draw2d_params);
-  const glov_sprite = require('./glov/sprite.js').create(graphics_device);
-  const glov_camera = require('./glov/camera.js').create(graphics_device, draw_2d);
-  const input_device = TurbulenzEngine.createInputDevice({});
-  const glov_input = require('./glov/input.js').create(input_device, draw_2d, glov_camera);
-  const draw_list = require('./glov/draw_list.js').create(draw_2d, glov_camera);
+const assert = require('assert');
+const glov_engine = require('./glov/engine.js');
+const glov_font = require('./glov/font.js');
+
+const Z_TILES = 10;
+const Z_BUILD_TILE = 30;
+const Z_ACTORS = 40;
+const Z_ACTORS_CARRYING = 50;
+const Z_UI = 100;
+const Z_TUT = 150;
+const Z_FLOAT = 200;
+const Z_MODAL = 1000;
+
+const game_width = 1280;
+const game_height = 960;
+
+export function main(canvas) {
+  glov_engine.startup({
+    canvas,
+    game_width,
+    game_height,
+    pixely: true,
+    do_borders: false,
+    font: {
+      info: require('./img/font/palanquin32.json'),
+      texture: 'font/palanquin32.png',
+    },
+    state: playInit,
+    ui_sprites: {
+      // button: ['uilocal/button.png', [28, 112, 31], [53]],
+      // button_rollover: ['uilocal/button_rollover.png', [28, 112, 31], [53]],
+      // button_disabled: ['uilocal/button_disabled.png', [28, 112, 31], [53]],
+      // button_down: ['uilocal/button_down.png', [28, 112, 31], [53]],
+      // menu_entry: ['uilocal/button_down.png', [28, 112, 31], [53]],
+      // menu_selected: ['uilocal/button_rollover.png', [28, 112, 31], [53]],
+      // menu_down: ['uilocal/button_down.png', [28, 112, 31], [53]],
+    }
+  });
+
+
+  const sound_manager = glov_engine.sound_manager;
+  const glov_camera = glov_engine.glov_camera;
+  const glov_input = glov_engine.glov_input;
+  glov_input.map_analog_to_dpad = false; // Do my own analog pad movement
+  const glov_sprite = glov_engine.glov_sprite;
+  const glov_ui = glov_engine.glov_ui;
+  const draw_list = glov_engine.draw_list;
+  const font = glov_engine.font;
+
   const random_seed = require('random-seed');
   const score = require('./score.js');
 
-  draw_list.setDefaultBucket('alpha_nearest');
-
-  const sound_manager = require('./glov/sound_manager.js').create();
   //sound_manager.use_oggs = true;
+  //sound_manager.music_on = false;
   if (!COMPO_VERSION) {
     sound_manager.loadSound('music1');
     sound_manager.loadSound('music2');
@@ -46,48 +76,36 @@ TurbulenzEngine.onload = function onloadFn()
   function loadTexture(texname) {
     return glov_sprite.loadTexture(texname);
   }
-  function createSprite(texname, params) {
-    return glov_sprite.createSprite(texname, params);
-  }
 
-  const arial32_info = require('./img/font/arial32.json');
-  const font = glov_font.create(draw_list, arial32_info, loadTexture('arial32.png'));
-  const glov_ui = require('./glov/ui.js').create(glov_sprite, glov_input, font, draw_list);
+  const createSpriteSimple = glov_sprite.createSpriteSimple.bind(glov_sprite);
+
   if (!COMPO_VERSION) {
     glov_ui.bindSounds(sound_manager, {
       button_click: 'button_click',
-      button_over: 'button_over',
+      rollover: 'button_over',
     });
   }
 
   // Preload
-  loadTexture('arrows.png');
+  loadTexture('arrow.png');
   loadTexture('background.png');
   loadTexture('base.png');
   loadTexture('drone.png');
-  loadTexture('resources.png');
+  loadTexture('resource.png');
   loadTexture('sell.png');
   loadTexture('upgrade_power.png');
 
   // Virtual viewport for our game logic
-  let game_width = 1280;
-  let game_height = 960;
   glov_camera.set2DAspectFixed(game_width, game_height);
-  const color_white = math_device.v4Build(1, 1, 1, 1);
-  const color_has_actor = math_device.v4Build(1, 1, 1, 0.1);
-  const color_resource_depleted = math_device.v4Build(0.2, 0.2, 0.2, 1);
-  const color_resource_non_full = math_device.v4Build(0.7, 0.7, 0.7, 1);
-  const color_red = math_device.v4Build(1, 0, 0, 1);
-  const color_yellow = math_device.v4Build(1, 1, 0, 1);
+  const color_white = VMath.v4Build(1, 1, 1, 1);
+  const color_has_actor = VMath.v4Build(1, 1, 1, 0.1);
+  const color_resource_depleted = VMath.v4Build(0.2, 0.2, 0.2, 1);
+  const color_resource_non_full = VMath.v4Build(0.7, 0.7, 0.7, 1);
 
   // Cache key_codes
   const key_codes = glov_input.key_codes;
-  const pad_codes = glov_input.pad_codes;
 
   let sprites = {};
-  let global_timer = 0;
-  let game_state;
-  let modal_dialog;
 
   function updateScoresDisplay(level_name) {
     let scores = score.high_scores[level_name];
@@ -102,7 +120,7 @@ TurbulenzEngine.onload = function onloadFn()
         let me = high_score.name === score.player_name;
         if (score_disp === last_unique_score) {
           // same, no index update
-        } else{
+        } else {
           last_unique_score = score_disp;
           last_unique = ii;
         }
@@ -111,6 +129,20 @@ TurbulenzEngine.onload = function onloadFn()
     }
     $('#score_list').html(html.join('\n'));
   }
+
+  function buttonText(x, y, z, w, h, text) {
+    return glov_ui.buttonText({ x, y, z, text, w, h, font_height: h * 0.7 });
+  }
+  function buttonImage(x, y, z, w, h, img, img_rect) {
+    return glov_ui.buttonImage({ x, y, z, w, h, img, img_rect });
+  }
+  function clickHit(x, y, w, h) {
+    return glov_input.clickHit({ x, y, w, h });
+  }
+  function isMouseOver(x, y, w, h) {
+    return glov_input.isMouseOver({ x, y, w, h });
+  }
+
   let scores_viewing_level;
   function viewScores() {
     score.updateHighScores(level_defs, function () {
@@ -118,14 +150,14 @@ TurbulenzEngine.onload = function onloadFn()
     });
     const BUTTON_H = 64;
     const BUTTON_W = 320;
-    if (glov_ui.buttonText(glov_camera.x1() - BUTTON_W,
+    if (buttonText(glov_camera.x1() - BUTTON_W,
       glov_camera.y1() - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Back')) {
-      game_state = playInit;
+      glov_engine.setState(playInit);
     }
   }
   function viewScoresInit(level_name) {
     scores_viewing_level = level_name;
-    game_state = viewScores;
+    glov_engine.setState(viewScores);
     $('#level_name').text(level_name);
     updateScoresDisplay(level_name);
     $('.screen').hide();
@@ -137,7 +169,7 @@ TurbulenzEngine.onload = function onloadFn()
         $('#name').val(score.player_name);
       }
       $('#name').focus(function () {
-        input_device.onBlur();
+        // input_device.onBlur();
       });
       $('#name').change(function (ev) {
         score.updatePlayerName(level_defs, $('#name').val());
@@ -147,39 +179,6 @@ TurbulenzEngine.onload = function onloadFn()
       });
     }
     $('#name').focus();
-  }
-
-  function testInit(dt) {
-    $('.screen').hide();
-    $('#title').show();
-    game_state = test;
-    test(dt);
-  }
-
-  function loading() {
-    let load_count = glov_sprite.loading() + sound_manager.loading();
-    $('#loading_text').text(`Loading (${load_count})...`);
-    if (!load_count) {
-      game_state = playInit;
-    }
-  }
-
-  function loadingInit() {
-    initGraphics();
-    $('.screen').hide();
-    $('#loading').show();
-    game_state = loading;
-    loading();
-  }
-
-  function title(dt) {
-  }
-
-  function titleInit(dt) {
-    $('.screen').hide();
-    $('#title').show();
-    game_state = title;
-    title(dt);
   }
 
   let indicator_pos = {};
@@ -193,14 +192,14 @@ TurbulenzEngine.onload = function onloadFn()
         'To get started, select the ' +
         'Build Drone tool.',
       indicator_name: 'buy_drone',
-      indicator: {x: 100, y: 100},
+      indicator: { x: 100, y: 100 },
       done: function () {
         return current_tile === 'drone';
       },
     },
     {
       msg: 'Now, place a Drone in the indicated square.',
-      indicator: {x: 0, y: 3},
+      indicator: { x: 0, y: 3 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && tile_type === 'drone';
       },
@@ -217,7 +216,7 @@ TurbulenzEngine.onload = function onloadFn()
         'until he faces to the right, ' +
         'towards your Base in the center ' +
         'of the level.',
-      indicator: {x: 0, y: 3},
+      indicator: { x: 0, y: 3 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && tile_type === 'drone';
       },
@@ -250,7 +249,7 @@ TurbulenzEngine.onload = function onloadFn()
     {
       msg:
         'Now it\'s another turn and we have more money to spend.\n\n' +
-        'Let\s harvest the Silver, this will require changing the direction of Drones with Arrows.\n\n' +
+        'Let\'s harvest the Silver, this will require changing the direction of Drones with Arrows.\n\n' +
         'Select the Arrow tool.',
       indicator_name: 'buy_arrow',
       done: function () {
@@ -259,7 +258,7 @@ TurbulenzEngine.onload = function onloadFn()
     },
     {
       msg: 'Now, place a Down Arrow in the indicated square.',
-      indicator: {x: 3, y: 6},
+      indicator: { x: 3, y: 6 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 3 && y === 6 && tile_type === 'arrow';
       },
@@ -270,7 +269,7 @@ TurbulenzEngine.onload = function onloadFn()
     },
     {
       msg: 'And an Up Arrow in this indicated square.',
-      indicator: {x: 3, y: 7},
+      indicator: { x: 3, y: 7 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 3 && y === 7 && tile_type === 'arrow';
       },
@@ -281,7 +280,7 @@ TurbulenzEngine.onload = function onloadFn()
     },
     {
       msg: 'Great!\n\nNow, a Drone facing left here.',
-      indicator: {x: 4, y: 6},
+      indicator: { x: 4, y: 6 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 4 && y === 6 && tile_type === 'drone';
       },
@@ -293,7 +292,7 @@ TurbulenzEngine.onload = function onloadFn()
     {
       msg: 'One last thing, let\'s move our first drone somewhere better.\n\n' +
         'Pick it up by right clicking, shift-clicking, or using the Sell tool.',
-      indicator: {x: 0, y: 3},
+      indicator: { x: 0, y: 3 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 0 && y === 3 && !tile_type;
       },
@@ -303,7 +302,7 @@ TurbulenzEngine.onload = function onloadFn()
     },
     {
       msg: 'Put it back down, facing right, right here.',
-      indicator: {x: 2, y: 4},
+      indicator: { x: 2, y: 4 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 2 && y === 4 && tile_type === 'drone';
       },
@@ -378,7 +377,7 @@ TurbulenzEngine.onload = function onloadFn()
     },
     {
       msg: 'And place it here, with the Output node (red) in the upper right.',
-      indicator: {x: 1, y: 6},
+      indicator: { x: 1, y: 6 },
       buy_validate: function (x, y, tile_type, dir) {
         return x === 1 && y === 6 && tile_type === 'craft2';
       },
@@ -388,8 +387,8 @@ TurbulenzEngine.onload = function onloadFn()
       },
     },
     {
-      msg: 'Finally, place 3 Drones and 2 Arrows in the configuration shown here:' +
-        new Array(12).join('\n'),
+      msg: `Finally, place 3 Drones and 2 Arrows in the configuration shown here:${
+        new Array(12).join('\n')}`,
       buy_validate: function (x, y, tile_type, dir) {
         return x >=0 && x <=3 && y >= 5 && y <= 8;
       },
@@ -429,14 +428,6 @@ TurbulenzEngine.onload = function onloadFn()
     },
   ];
 
-  const Z_TILES = 10;
-  const Z_BUILD_TILE = 30;
-  const Z_ACTORS = 40;
-  const Z_ACTORS_CARRYING = 50;
-  const Z_UI = 100;
-  const Z_TUT = 150;
-  const Z_FLOAT = 200;
-  const Z_MODAL = 1000;
   let view_offset = [100,100];
 
   const BASE_SIZE = 3;
@@ -445,51 +436,38 @@ TurbulenzEngine.onload = function onloadFn()
     if (sprites.white) {
       return;
     }
-    sprites.white = createSprite('white', {
-      width : 1,
-      height : 1,
-      x : 0,
-      y : 0,
-      rotation : 0,
-      color : [1,1,1, 1],
-      origin: [0, 0],
-      textureRectangle : math_device.v4Build(0, 0, 1, 1)
-    });
+    const origin_0_0 = glov_sprite.origin_0_0;
+    sprites.white = createSpriteSimple('white', 1, 1, origin_0_0);
 
     let spriteSize = 13;
     let background_tile = 100;
     function buildRects(w, h, sx, sy) {
       sx = sx || 1;
       sy = sy || 1;
-      let rects = [];
-      for (let jj = 0; jj < h; ++jj) {
-        for (let ii = 0; ii < w; ++ii) {
-          let r = math_device.v4Build(ii * spriteSize * sx, jj * spriteSize * sy, (ii + 1) * spriteSize * sx, (jj + 1) * spriteSize * sy);
-          rects.push(r);
-        }
+      let ws = [];
+      for (let ii = 0; ii < w; ++ii) {
+        ws.push(spriteSize * sx);
       }
-      return rects;
+      let hs = [];
+      for (let jj = 0; jj < h; ++jj) {
+        hs.push(spriteSize * sy);
+      }
+      return glov_sprite.buildRects(ws, hs).rects;
     }
-    sprites.background = createSprite('background.png', {
-      width : TILE_SIZE * 4 * background_tile,
-      height : TILE_SIZE * 4 * background_tile,
-      rotation : 0,
-      textureRectangle : math_device.v4Build(0, 0, spriteSize * 4 * background_tile, spriteSize * 4 * background_tile),
+    sprites.background = createSpriteSimple('background.png', spriteSize * 4 * background_tile, spriteSize * 4 * background_tile, {
+      width: TILE_SIZE * 4 * background_tile,
+      height: TILE_SIZE * 4 * background_tile,
       origin: [0,0],
     });
-    sprites.tutorial1 = createSprite('tutorial1.png', {
-      width : TILE_SIZE * 4,
-      height : TILE_SIZE * 4,
-      rotation : 0,
-      textureRectangle : math_device.v4Build(0, 0, 128, 128),
+    sprites.tutorial1 = createSpriteSimple('tutorial1.png', 128, 128, {
+      width: TILE_SIZE * 4,
+      height: TILE_SIZE * 4,
       origin: [0,0],
     });
     function loadSprite(name, tx, ty, sx, sy) {
-      sprites[name] = createSprite(name + '.png', {
-        width : TILE_SIZE * (sx || 1),
-        height : TILE_SIZE * (sy || 1),
-        rotation : 0,
-        textureRectangle : math_device.v4Build(0, 0, spriteSize * (sx || 1), spriteSize * (sy || 1)),
+      sprites[name] = createSpriteSimple(`${name}.png`, spriteSize * (sx || 1), spriteSize * (sy || 1), {
+        width: TILE_SIZE * (sx || 1),
+        height: TILE_SIZE * (sy || 1),
         origin: [0,0],
       });
       sprites[name].rects = buildRects(tx,ty, sx, sy);
@@ -505,7 +483,7 @@ TurbulenzEngine.onload = function onloadFn()
     loadSprite('craft3', 2, 2, 3, 3);
     loadSprite('sound', 2, 5);
 
-    sprites.panel = glov_ui.loadSpriteRect('panel.png', [2, 12, 2], [2, 12, 2]);
+    sprites.panel = createSpriteSimple('panel.png', [2, 12, 2], [2, 12, 2], origin_0_0);
   }
 
   const base_slurp_coords = [
@@ -547,7 +525,7 @@ TurbulenzEngine.onload = function onloadFn()
       [-1, 0, 3],
       [0, -1, 3],
     ],
-    craft3:[
+    craft3: [
       [2, -1, 0],
       [3, 0, 0],
       [3, 2, 1],
@@ -651,15 +629,17 @@ TurbulenzEngine.onload = function onloadFn()
   let VALCRAFT3 = 100;
   let VALSAME2 = 50;
   let VALSEQUENTIAL2 = 80;
-  let VALSAME3 = 200;
+  //let VALSAME3 = 200;
   let VALSEQUENTIAL3 = 300;
-  let VAL_electrum, VAL_green_gold, VAL_jewelry;
+  let VAL_electrum;
+  let VAL_green_gold;
+  let VAL_jewelry;
   const recipes = [
     // tile, type, value, src1, src2, ...
     [0, 'pure copper', VALC + VALC + VALCRAFT2 + VALSAME2, 'copper', 'copper'], // no significant bonus
     [1, 'pure silver', VALS + VALS + VALCRAFT2 + VALSAME2, 'silver', 'silver'],
     [2, 'pure gold', VALG + VALG + VALCRAFT2 + VALSAME2, 'gold', 'gold'],
-    [6, 'sterling', VALC + VALS + VALCRAFT2 + VALSEQUENTIAL2,  'copper', 'silver'],
+    [6, 'sterling', VALC + VALS + VALCRAFT2 + VALSEQUENTIAL2, 'copper', 'silver'],
     [7, 'rose gold', VALC + VALG + VALCRAFT2, 'copper', 'gold'],
     [8, 'jewelry', (VAL_jewelry = VALS + VALG + VALCRAFT2 + VALSEQUENTIAL2), 'silver', 'gold'],
 
@@ -848,7 +828,6 @@ TurbulenzEngine.onload = function onloadFn()
 
   const POWER_STEP = 2;
   class DroneDayState {
-
     allocLevel(w, h) {
       this.map = new Array(w);
       this.busy = new Array(w);
@@ -898,7 +877,7 @@ TurbulenzEngine.onload = function onloadFn()
       for (let x = 0; x < this.map.length; ++x) {
         for (let y = 0; y < this.map[x].length; ++y) {
           if (!this.map[x][y]) {
-            open_tiles.push({x, y});
+            open_tiles.push({ x, y });
           }
         }
       }
@@ -922,7 +901,7 @@ TurbulenzEngine.onload = function onloadFn()
               contents: null,
             };
           }
-        } else  {
+        } else {
           for (let jj = 0; jj < count; ++jj) {
             if (!open_tiles.length) {
               break;
@@ -1046,7 +1025,7 @@ TurbulenzEngine.onload = function onloadFn()
       if (COMPO_VERSION) {
         return false;
       }
-      return !!this.saved_state;
+      return Boolean(this.saved_state);
     }
     canSave() {
       if (COMPO_VERSION) {
@@ -1174,7 +1153,7 @@ TurbulenzEngine.onload = function onloadFn()
           dmoney = -this.costOf(tile_type, 1);
           if (-dmoney > this.money) {
             sound_manager.play('place_error');
-            floatText(x, y, FLOATER_TIME_BUY, `Cannot afford \$${-dmoney}`, font_style_buy);
+            floatText(x, y, FLOATER_TIME_BUY, `Cannot afford $${-dmoney}`, font_style_buy);
             dmoney = 0;
           } else {
             // place new tile(s)
@@ -1194,7 +1173,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
       }
       if (dmoney) {
-        floatText(x, y, FLOATER_TIME_BUY, `${(dmoney < 0) ? '-' : '+'}\$${Math.abs(dmoney)}`, (dmoney > 0) ? font_style_sale : font_style_buy);
+        floatText(x, y, FLOATER_TIME_BUY, `${(dmoney < 0) ? '-' : '+'}$${Math.abs(dmoney)}`, (dmoney > 0) ? font_style_sale : font_style_buy);
         this.money += dmoney;
       }
       this.saveState();
@@ -1205,7 +1184,7 @@ TurbulenzEngine.onload = function onloadFn()
         return;
       }
       this.tick_sounds[name] = true;
-      sound_manager.play('tick_' + name);
+      sound_manager.play(`tick_${name}`);
     }
 
     resetActors() {
@@ -1279,7 +1258,9 @@ TurbulenzEngine.onload = function onloadFn()
       }
       // tick bases before craft3 before craft2 before resources
       let tick_order = ['base', 'craft3', 'craft2', 'resource'];
-      let tickers_out = tick_order.map(function() { return []; });
+      let tickers_out = tick_order.map(function () {
+        return [];
+      });
       for (let ii = 0; ii < tickers.length; ++ii) {
         let idx = tick_order.indexOf(tickers[ii].tile.type);
         assert(idx !== -1);
@@ -1336,7 +1317,7 @@ TurbulenzEngine.onload = function onloadFn()
             this.dmoney += resource_value;
             tile.contents[ii] = null;
             floatText((ticker.x + base_contents_coords[ii][0]), (ticker.y + base_contents_coords[ii][1]),
-              FLOATER_TIME_BASE_SALE, `${resource_types[res].type}: +\$${resource_value}`, font_style_sale);
+              FLOATER_TIME_BASE_SALE, `${resource_types[res].type}: +$${resource_value}`, font_style_sale);
             this.playTickSound('sell');
 
             if (this.ld.goal[0] === 'sell' && this.ld.goal[1] === resource_types[res].type) {
@@ -1364,8 +1345,10 @@ TurbulenzEngine.onload = function onloadFn()
         if (target_actor.carrying) {
           tile.contents = tile.contents || [];
           tile.contents[target_contents] = target_actor.carrying;
-          this.resource_transfers.push([target_actor.carrying, target_x, target_y,
-            ticker.x + base_contents_coords[target_contents][0], ticker.y + base_contents_coords[target_contents][1]]);
+          this.resource_transfers.push([
+            target_actor.carrying, target_x, target_y,
+            ticker.x + base_contents_coords[target_contents][0], ticker.y + base_contents_coords[target_contents][1]
+          ]);
           target_actor.carrying = null;
           target_actor.gain_resource_tick = this.tick_id;
           this.playTickSound('dropoff');
@@ -1410,8 +1393,8 @@ TurbulenzEngine.onload = function onloadFn()
           let new_value = resource_types[res].value;
           let delta = new_value - orig_val;
           floatText(ticker.x, ticker.y, FLOATER_TIME_CRAFT,
-            message.join(' + ') + ': ' + resource_types[res].type +
-            ` (${( delta >= 0) ? '+' : '-'}\$${Math.abs(delta)})`,
+            `${message.join(' + ')}: ${resource_types[res].type
+            } (${(delta >= 0) ? '+' : '-'}$${Math.abs(delta)})`,
             font_style_craft);
         }
       }
@@ -1534,27 +1517,29 @@ TurbulenzEngine.onload = function onloadFn()
       }
       actor.tick_id = this.tick_id;
       actor.thinking = true;
+      // eslint-disable-next-line default-case
       switch (actor.type) {
-      case 'drone':
-        this.tryMove(actor);
-        this.handleTurn(actor);
-        break;
+        case 'drone':
+          this.tryMove(actor);
+          this.handleTurn(actor);
+          break;
       }
       actor.thinking = false;
     }
 
     tickTicker(ticker) {
-      switch(ticker.tile.type) {
-      case 'resource':
-        this.tickResource(ticker);
-        break;
-      case 'base':
-        this.tickBase(ticker);
-        break;
-      case 'craft2':
-      case 'craft3':
-        this.tickCraft(ticker);
-        break;
+      // eslint-disable-next-line default-case
+      switch (ticker.tile.type) {
+        case 'resource':
+          this.tickResource(ticker);
+          break;
+        case 'base':
+          this.tickBase(ticker);
+          break;
+        case 'craft2':
+        case 'craft3':
+          this.tickCraft(ticker);
+          break;
       }
     }
 
@@ -1612,7 +1597,7 @@ TurbulenzEngine.onload = function onloadFn()
     $('#canvas').focus();
     $('.screen').hide();
     $('#play').show();
-    game_state = play;
+    glov_engine.setState(play);
     dd = new DroneDayState();
     current_direction = 2;
     if (DEBUG) {
@@ -1627,7 +1612,6 @@ TurbulenzEngine.onload = function onloadFn()
       // dd.buyTile(2, 3, 'drone', 2);
 
       // dd.buyTile(2, 4, 'arrow', 1);
-
 
 
       // dd.buyTile(10, 3, 'drone', 2);
@@ -1674,8 +1658,7 @@ TurbulenzEngine.onload = function onloadFn()
     draw_list.queue(s, x * TILE_SIZE, y * TILE_SIZE, z, color, null, tex_rect);
   }
 
-  function easeInOut(v, a)
-  {
+  function easeInOut(v, a) {
     let va = Math.pow(v, a);
     return va / (va + Math.pow(1 - v, a));
   }
@@ -1764,8 +1747,8 @@ TurbulenzEngine.onload = function onloadFn()
     let cost_calc = cost_table[store[ii].type];
     if (cost_calc) {
       store[ii].tooltip.push('',
-        `Base Cost: \$${cost_calc[0]}`,
-        `Delta Cost: \$${cost_calc[1]}`);
+        `Base Cost: $${cost_calc[0]}`,
+        `Delta Cost: $${cost_calc[1]}`);
     }
     store[ii].tooltip.push(`Hotkey: ${ii + 1}`);
   }
@@ -1776,9 +1759,7 @@ TurbulenzEngine.onload = function onloadFn()
   ];
 
   function drawPanel(x, y, z, w, h) {
-    glov_ui.drawBox(sprites.panel, x, y, z, w, h, 80, [1,1,0.8,1]);
-    glov_input.clickHit(x, y, w, h);
-    glov_input.isMouseOver(x, y, w, h);
+    return glov_ui.panel({ x, y, z, w, h, color: [1,1,0.8,1] });
   }
 
   function drawResource(x, y, tile, z) {
@@ -1792,7 +1773,7 @@ TurbulenzEngine.onload = function onloadFn()
   const TOOLTIP_W = 300;
   function buttonTooltip(x, y, z, w, h, img, img_rect, tooltip_x, tooltip) {
     let ret = false;
-    if (glov_ui.buttonImage(x, y, z, w, h, img, img_rect)) {
+    if (buttonImage(x, y, z, w, h, img, img_rect)) {
       ret = true;
     }
     if (glov_ui.button_mouseover) {
@@ -1800,7 +1781,7 @@ TurbulenzEngine.onload = function onloadFn()
       let ty = y + 8;
       if (tooltip) {
         for (let ii = 0; ii < tooltip.length; ++ii) {
-          font.drawSized(panel_font_style, tx, ty, z + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
+          font.drawSized(panel_font_style, tx, ty, z + 2, TOOLTIP_FONT_SIZE, tooltip[ii]);
           ty += TOOLTIP_FONT_SIZE;
         }
         drawPanel(tooltip_x, y, z + 1, TOOLTIP_W, ty - y + 8);
@@ -1826,7 +1807,7 @@ TurbulenzEngine.onload = function onloadFn()
       let newpos = glov_input.mousePos();
       let delta = [newpos[0] - panning_start[0], newpos[1] - panning_start[1]];
       if (Math.abs(delta[0]) + Math.abs(delta[1]) > 20) {
-        glov_input.clickHit(-Infinity, -Infinity, Infinity, Infinity);
+        clickHit(-Infinity, -Infinity, Infinity, Infinity);
       }
     } else if (pan) {
       let newpos = glov_input.mousePos();
@@ -1843,7 +1824,7 @@ TurbulenzEngine.onload = function onloadFn()
     let ty0 = y - h;
     let ty = ty0 + 8;
     for (let ii = 0; ii < tooltip.length; ++ii) {
-      font.drawSized(panel_font_style, tx, ty, Z_UI + 2, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, tooltip[ii]);
+      font.drawSized(panel_font_style, tx, ty, Z_UI + 2, TOOLTIP_FONT_SIZE, tooltip[ii]);
       ty += TOOLTIP_FONT_SIZE;
     }
     drawPanel(x, ty0, Z_UI+1, TOOLTIP_W, h);
@@ -1861,18 +1842,18 @@ TurbulenzEngine.onload = function onloadFn()
         floaters[ii] = floaters[floaters.length - 1];
         floaters.pop();
       } else {
-        /*jshint bitwise:false*/
         let a = Math.min(1, (2 - 2 * fl.t / fl.time)) * 255 | 0;
         let style = glov_font.style(fl.style, {
           color: fl.style.color & 0xFFFFFF00 | a,
           outline_color: fl.style.outline_color & 0xFFFFFF00 | a,
         });
-        font.drawSized(style, fl.x, y, fl.z, FLOATER_SIZE, FLOATER_SIZE, fl.text);
+        font.drawSized(style, fl.x, y, fl.z, FLOATER_SIZE, fl.text);
       }
     }
   }
 
-  let money_x, money_y;
+  let money_x;
+  let money_y;
   let sell_clicks = 0;
   let show_recipes = false;
   let auto_started_tut = false;
@@ -1899,7 +1880,7 @@ TurbulenzEngine.onload = function onloadFn()
       let y = 20;
       const MENU_FONT_SIZE1 = 48;
       const z = Z_MODAL;
-      font.drawAlignedSized(panel_font_style, x, y, z, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
+      font.drawSizedAligned(panel_font_style, x, y, z, MENU_FONT_SIZE1,
         glov_font.ALIGN.HCENTER, w, 0,
         'Recipes and Resources');
       y += MENU_FONT_SIZE1;
@@ -1918,8 +1899,8 @@ TurbulenzEngine.onload = function onloadFn()
         }
         if (idx >= idx0 && idx < idx1) {
           drawResource(x + 8, y, r.tile, z);
-          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, z, font_size, font_size,
-            `${r.type} (\$${r.value})`);
+          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, z, font_size,
+            `${r.type} ($${r.value})`);
           y += line_size;
         }
         idx++;
@@ -1928,19 +1909,20 @@ TurbulenzEngine.onload = function onloadFn()
         let r = recipes[ii];
         if (idx >= idx0 && idx < idx1) {
           drawResource(x + 8, y, r[0], z);
-          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, z, font_size, font_size,
-            `${r[1]} (\$${r[2]})`);
+          font.drawSized(panel_font_style, x + TILE_SIZE + 4, y, z, font_size,
+            `${r[1]} ($${r[2]})`);
 
           let xx = x + 400;
           let ingred = r.slice(3);
+          // eslint-disable-next-line no-shadow
           for (let ii = 0; ii < ingred.length; ++ii) {
-            font.drawSized(panel_font_style, xx, y, z, font_size, font_size, (ii === 0) ? '=' : '+');
+            font.drawSized(panel_font_style, xx, y, z, font_size, (ii === 0) ? '=' : '+');
             xx += font_size * 2;
             if (ingred[ii]) {
               drawResource(xx, y, resource_types[findResourceType(ingred[ii])].tile, z);
               xx += TILE_SIZE;
             }
-            font.drawSized(panel_font_style, xx, y, z, font_size, font_size, ingred[ii] || '(anything)');
+            font.drawSized(panel_font_style, xx, y, z, font_size, ingred[ii] || '(anything)');
             xx += 180;
           }
           y += line_size;
@@ -1948,14 +1930,14 @@ TurbulenzEngine.onload = function onloadFn()
         idx++;
       }
 
-      if (recipes_page && glov_ui.buttonText(16 + (BUTTON_W + 4) * 1.5, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Prev Page')) {
+      if (recipes_page && buttonText(16 + (BUTTON_W + 4) * 1.5, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Prev Page')) {
         recipes_page--;
       }
-      if (((recipes_page + 1) * num_per_page <= idx) &&  glov_ui.buttonText(16 + (BUTTON_W + 4) * 2.5, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Next Page')) {
+      if (((recipes_page + 1) * num_per_page <= idx) && buttonText(16 + (BUTTON_W + 4) * 2.5, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Next Page')) {
         recipes_page++;
       }
 
-      if (glov_ui.buttonText(16, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Back')) {
+      if (buttonText(16, game_height - BUTTON_H - 16, z, BUTTON_W, BUTTON_H, 'Back')) {
         if (show_recipes_big) {
           show_recipes_big = false;
         } else {
@@ -1975,8 +1957,8 @@ TurbulenzEngine.onload = function onloadFn()
 
     if (play_state === 'build') {
       // Bottom UI
-      indicator_pos.preview = { x: BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H};
-      if (glov_ui.buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
+      indicator_pos.preview = { x: BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H };
+      if (buttonText(0, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H, 'Preview')) {
         if (dd.tutorial_state && tutorial_states[dd.tutorial_state] && tutorial_states[dd.tutorial_state].indicator_name !== 'preview') {
           floatTextUI(0, UI_BOTTOM - BUTTON_H, 2000, 'Invalid (please follow directions)', font_style_buy);
         } else {
@@ -1994,7 +1976,7 @@ TurbulenzEngine.onload = function onloadFn()
       }
       ++button_bottom_count;
 
-      if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
+      if (buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
         'Menu')
       ) {
         play_state = 'menu';
@@ -2004,13 +1986,13 @@ TurbulenzEngine.onload = function onloadFn()
         if (glov_input.isKeyDown(key_codes.LEFT_SHIFT) || glov_input.isKeyDown(key_codes.RIGHT_SHIFT)) {
           // do save/load
           if (dd.canLoad()) {
-            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+            if (buttonImage(game_width - BUTTON_W - 4*1 - Number(BUTTON_H), UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
               sprites.sound, sprites.sound.rects[7])
             ) {
               dd.load();
             }
             if (glov_ui.button_mouseover) {
-              tooltipOver(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H,
+              tooltipOver(game_width - BUTTON_W - 4*1 - Number(BUTTON_H), UI_BOTTOM - BUTTON_H,
                 [
                   'Restore previously',
                   'saved state.',
@@ -2020,7 +2002,7 @@ TurbulenzEngine.onload = function onloadFn()
           }
 
           if (dd.canSave()) {
-            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+            if (buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
               sprites.sound, sprites.sound.rects[6])
             ) {
               dd.save();
@@ -2040,13 +2022,13 @@ TurbulenzEngine.onload = function onloadFn()
 
         } else {
           if (dd.canRedo()) {
-            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+            if (buttonImage(game_width - BUTTON_W - 4*1 - Number(BUTTON_H), UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
               sprites.sound, sprites.sound.rects[5])
             ) {
               dd.redo();
             }
             if (glov_ui.button_mouseover) {
-              tooltipOver(game_width - BUTTON_W - 4*1 - BUTTON_H*1, UI_BOTTOM - BUTTON_H,
+              tooltipOver(game_width - BUTTON_W - 4*1 - Number(BUTTON_H), UI_BOTTOM - BUTTON_H,
                 [
                   'Redo what you just',
                   'undid.  Make up your',
@@ -2057,7 +2039,7 @@ TurbulenzEngine.onload = function onloadFn()
           }
 
           if (dd.canUndo()) {
-            if (glov_ui.buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+            if (buttonImage(game_width - BUTTON_W - 4*2 - BUTTON_H*2, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
               sprites.sound, sprites.sound.rects[4])
             ) {
               dd.undo();
@@ -2076,7 +2058,7 @@ TurbulenzEngine.onload = function onloadFn()
             }
           }
 
-          if (glov_ui.buttonImage(game_width - BUTTON_W - 4*3 - BUTTON_H*3, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
+          if (buttonImage(game_width - BUTTON_W - 4*3 - BUTTON_H*3, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_H, BUTTON_H,
             sprites.sound, sprites.sound.rects[8])
           ) {
             show_recipes_big = true;
@@ -2100,21 +2082,21 @@ TurbulenzEngine.onload = function onloadFn()
       let top_y0 = glov_camera.y0();
       let top_y = top_y0;
       const TOP_FONT_SIZE = 28;
-      font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
+      font.drawSizedAligned(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE,
         glov_font.ALIGN.HCENTER, TOP_W, 0, `Level: ${dd.ld.name}`);
       top_y += TOP_FONT_SIZE;
       if (dd.ld.goal[0] === 'sell') {
-        font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
+        font.drawSizedAligned(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE,
           glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Craft and Sell 1 ${dd.ld.goal[1]}`);
         top_y += TOP_FONT_SIZE;
       } else if (dd.ld.goal[0] === 'net_worth') {
-        font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE, TOP_FONT_SIZE,
-          glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Net Worth of \$${dd.ld.goal[1]}`);
+        font.drawSizedAligned(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE,
+          glov_font.ALIGN.HCENTER, TOP_W, 0, `Goal: Net Worth of $${dd.ld.goal[1]}`);
         top_y += TOP_FONT_SIZE;
       }
-      font.drawAlignedSized(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE * 0.8, TOP_FONT_SIZE * 0.8,
+      font.drawSizedAligned(panel_font_style, TOP_X, top_y, Z_UI, TOP_FONT_SIZE * 0.8,
         glov_font.ALIGN.HCENTER, TOP_W, 0,
-        `Current Net Worth: \$${dd.netWorth()}`);
+        `Current Net Worth: $${dd.netWorth()}`);
       top_y += TOP_FONT_SIZE * 0.8;
       top_y += 12;
       drawPanel(TOP_X, top_y0 - 100, Z_UI-1,
@@ -2128,11 +2110,11 @@ TurbulenzEngine.onload = function onloadFn()
 
       money_x = x + font.getStringWidth(panel_font_style, font_size, 'Money: ');
       money_y = y + 12;
-      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
-        `Money: \$${dd.money}`);
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size,
+        `Money: $${dd.money}`);
       y += font_size + pad;
 
-      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size,
         'Build:');
       y += font_size + pad;
 
@@ -2143,9 +2125,9 @@ TurbulenzEngine.onload = function onloadFn()
         if (current_tile === store[ii].type) {
           tile = current_direction;
         }
-        indicator_pos['buy_' + store[ii].type] = { x: bx + BUTTON_H_BUY / 2, y: y + 16 };
+        indicator_pos[`buy_${store[ii].type}`] = { x: bx + BUTTON_H_BUY / 2, y: y + 16 };
         if (buttonTooltip(bx, y, Z_UI, BUTTON_W_BUY, BUTTON_H_BUY, sprites[store[ii].type], sprites[store[ii].type].rects[tile], TOOLTIP_X, store[ii].tooltip) ||
-          glov_input.keyDownHit(key_codes['NUMBER_' + (1 + ii)])
+          glov_input.keyDownHit(key_codes[`NUMBER_${1 + ii}`])
         ) {
           if (current_tile === store[ii].type && current_tile !== 'sell') {
             current_direction = (current_direction + 1) % 4;
@@ -2164,8 +2146,8 @@ TurbulenzEngine.onload = function onloadFn()
 
         if (tools_w === 1 && store[ii].type !== 'sell') {
           let cost = dd.costOf(store[ii].type, 1);
-          font.drawSized(panel_font_style, x + BUTTON_W_BUY + 8, y + COST_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
-            `\$${cost}`);
+          font.drawSized(panel_font_style, x + BUTTON_W_BUY + 8, y + COST_FONT_PAD, Z_UI, COST_FONT_SIZE,
+            `$${cost}`);
         }
 
         if (ii % tools_w === (tools_w - 1) || ii === store.length - 1) {
@@ -2178,7 +2160,7 @@ TurbulenzEngine.onload = function onloadFn()
 
       y += pad;
 
-      font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+      font.drawSized(panel_font_style, x, y, Z_UI, font_size,
         'Upgrade:');
       y += font_size + pad;
 
@@ -2188,37 +2170,37 @@ TurbulenzEngine.onload = function onloadFn()
       for (let ii = 0; ii < upgrades.length; ++ii) {
         let ugt = upgrades[ii].type;
 
-        font.drawSized(panel_font_style, x, y, Z_UI, font_size, font_size,
+        font.drawSized(panel_font_style, x, y, Z_UI, font_size,
           'Drone Power');
         y += font_size + pad;
 
         draw_list.queue(sprites[ugt], x, y, Z_UI, color_white);
 
         /* jshint bitwise:false*/
-        font.drawAlignedSized(panel_font_style, x, y, Z_UI + 1, font_size, font_size,
+        font.drawSizedAligned(panel_font_style, x, y, Z_UI + 1, font_size,
           glov_font.ALIGN.HCENTER | glov_font.ALIGN.VCENTER, ICON_UPGRADE_SIZE, ICON_UPGRADE_SIZE, `${dd.max_power}`);
 
         let cost_up = dd.upgradeCost(ugt, 1);
-        font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
-          `\$${cost_up}`);
+        font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE,
+          `$${cost_up}`);
         let cost_down = dd.upgradeCost(ugt, 0);
         if (cost_down) {
-          font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + BUTTON_UPGRADE_SIZE + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE, COST_FONT_SIZE,
-            `\$${cost_down}`);
+          font.drawSized(panel_font_style, x + ICON_UPGRADE_SIZE + 8 + 32 + 8, y + BUTTON_UPGRADE_SIZE + UPGRADE_FONT_PAD, Z_UI, COST_FONT_SIZE,
+            `$${cost_down}`);
         }
 
-        if (cost_up <= dd.money && glov_ui.buttonText(x + ICON_UPGRADE_SIZE + 8, y, Z_UI, BUTTON_UPGRADE_SIZE, BUTTON_UPGRADE_SIZE, '+')) {
+        if (cost_up <= dd.money && buttonText(x + ICON_UPGRADE_SIZE + 8, y, Z_UI, BUTTON_UPGRADE_SIZE, BUTTON_UPGRADE_SIZE, '+')) {
           dd.max_power+=POWER_STEP;
           dd.money -= cost_up;
           dd.saveState();
-          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `-\$${cost_up}`, font_style_buy);
+          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `-$${cost_up}`, font_style_buy);
           floatTextUI(x, y + ICON_UPGRADE_SIZE / 2 , FLOATER_TIME_BUY, `+${POWER_STEP} Power`, font_style_sale);
         }
-        if (cost_down && glov_ui.buttonText(x + ICON_UPGRADE_SIZE + 8, y + ICON_UPGRADE_SIZE - BUTTON_UPGRADE_SIZE, Z_UI, BUTTON_UPGRADE_SIZE, BUTTON_UPGRADE_SIZE, '-')) {
+        if (cost_down && buttonText(x + ICON_UPGRADE_SIZE + 8, y + ICON_UPGRADE_SIZE - BUTTON_UPGRADE_SIZE, Z_UI, BUTTON_UPGRADE_SIZE, BUTTON_UPGRADE_SIZE, '-')) {
           dd.max_power-=POWER_STEP;
           dd.money += cost_down;
           dd.saveState();
-          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `+\$${cost_down}`, font_style_sale);
+          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `+$${cost_down}`, font_style_sale);
           floatTextUI(x, y + ICON_UPGRADE_SIZE / 2, FLOATER_TIME_BUY, `-${POWER_STEP} Power`, font_style_buy);
         }
 
@@ -2230,7 +2212,7 @@ TurbulenzEngine.onload = function onloadFn()
       drawPanel(UI_SIDE - 64, 0, Z_UI - 1, PANEL_W + 64, y);
 
       if (dd.dmoney) {
-        status = `Turn ${dd.turn + 1}; Last turn earnings: \$${dd.dmoney}`;
+        status = `Turn ${dd.turn + 1}; Last turn earnings: $${dd.dmoney}`;
       } else {
         status = `Turn ${dd.turn + 1}`;
       }
@@ -2267,12 +2249,12 @@ TurbulenzEngine.onload = function onloadFn()
         glov_ui.drawBox(sprites.panel, UI_RIGHT - POWER_BAR_W, bar_y, Z_UI + 1, POWER_BAR_W, POWER_BAR_H * power_left,
           64, [0,1,0,1]);
         if (dd.power) {
-          font.drawAlignedSized(null, UI_RIGHT - POWER_BAR_W, bar_y + 8, Z_UI + 2, 64, 64, glov_font.ALIGN.HCENTER,
+          font.drawSizedAligned(null, UI_RIGHT - POWER_BAR_W, bar_y + 8, Z_UI + 2, 64, glov_font.ALIGN.HCENTER,
             POWER_BAR_W, 0, `${dd.power}`);
         }
       }
 
-      if (glov_ui.buttonText((BUTTON_W + 4) * button_bottom_count, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
+      if (buttonText((BUTTON_W + 4) * button_bottom_count, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
         (dd.power < 0) ? 'Back to Build' : 'Cancel')
       ) {
         previewEnd();
@@ -2289,29 +2271,29 @@ TurbulenzEngine.onload = function onloadFn()
       ++button_bottom_count;
 
       if (dd.power < 0) {
-        indicator_pos.next_turn = { x: game_width - BUTTON_W +  BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H};
-        if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
+        indicator_pos.next_turn = { x: game_width - BUTTON_W + BUTTON_W / 2, y: UI_BOTTOM - BUTTON_H };
+        if (buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
           dd.goal_reached ? 'Victory!' : 'Next Turn')
         ) {
-          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `+\$${dd.dmoney}`, font_style_sale);
+          floatTextUI(money_x, money_y, FLOATER_TIME_BUY, `+$${dd.dmoney}`, font_style_sale);
           advanceEnd();
         }
         if (glov_ui.button_mouseover) {
           tooltipOver(game_width - TOOLTIP_W, UI_BOTTOM - BUTTON_H, dd.goal_reached ?
-          [
-            'You have accomplished',
-            'this level\'s goals!',
-            'Click to return to',
-            'level selection.',
-          ] :
-          [
-            'Collect your earnings',
-            `(\$${dd.dmoney}) and start`,
-            'your next turn.'
-          ]);
+            [
+              'You have accomplished',
+              'this level\'s goals!',
+              'Click to return to',
+              'level selection.',
+            ] :
+            [
+              'Collect your earnings',
+              `($${dd.dmoney}) and start`,
+              'your next turn.'
+            ]);
         }
       } else {
-        if (glov_ui.buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
+        if (buttonText(game_width - BUTTON_W, UI_BOTTOM - BUTTON_H, Z_UI, BUTTON_W, BUTTON_H,
           (tick_time === ADVANCE_SPEED) ? 'Speed: Regular' : 'Speed: Fast')
         ) {
           tick_time = (tick_time === ADVANCE_SPEED) ? ADVANCE_SPEED_FAST : ADVANCE_SPEED;
@@ -2326,7 +2308,7 @@ TurbulenzEngine.onload = function onloadFn()
         }
       }
 
-      status = `Turn ${dd.turn + 1} Earnings: \$${dd.dmoney}`;
+      status = `Turn ${dd.turn + 1} Earnings: $${dd.dmoney}`;
     } else if (play_state === 'menu') {
       score.updateHighScores(level_defs);
       const MENU_W = 900;
@@ -2337,12 +2319,12 @@ TurbulenzEngine.onload = function onloadFn()
       let x = MENU_X;
       let y = MENU_Y + 8;
 
-      font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1, MENU_FONT_SIZE1,
+      font.drawSizedAligned(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE1,
         glov_font.ALIGN.HCENTER, MENU_W, 0,
         'Drone Supervisor');
       y += MENU_FONT_SIZE1;
 
-      font.drawAlignedSized(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE2, MENU_FONT_SIZE2,
+      font.drawSizedAligned(panel_font_style, x, y, Z_UI, MENU_FONT_SIZE2,
         glov_font.ALIGN.HCENTER, MENU_W, 0,
         'Ludum Dare #39 Entry by Jimbly');
       y += MENU_FONT_SIZE2;
@@ -2356,59 +2338,45 @@ TurbulenzEngine.onload = function onloadFn()
       const MENU_BUTTON_W = BUTTON_W;
       const LEVEL_X = SCORE_X - MENU_BUTTON_W - 16;
       const SCORE_SIZE = MENU_FONT_SIZE2;
-      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE,
         'Score');
-      font.drawSized(panel_font_style, SCORE_HIGH_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_HIGH_X, y, Z_UI, SCORE_SIZE,
         'High Score');
       y += SCORE_SIZE;
       let score_total = { turns: 0, net_worth: 0 };
       let all_done = true;
-      let doStartLevel = function(ld) {
+      // eslint-disable-next-line no-inner-declarations
+      function doStartLevel(ld) {
         dd.startLevel(ld);
         play_state = 'build';
-      };
+      }
       for (let ii = 0; ii < level_defs.length; ++ii) {
         let ld = level_defs[ii];
-        if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W, BUTTON_H, ld.name)) {
-          if (!COMPO_VERSION && !dd.goal_reached_persist && dd.history.length > 1) {
-            // already have something in progress, prompt first!
-            modal_dialog = (function (ld) {
-              const MODAL_W = 600;
-              let pad = 16;
-              const text_w = MODAL_W - pad * 2;
-              let x = (game_width - MODAL_W) / 2;
-              const y0 = 200;
-              let y = y0 + pad;
-
-              y += font.drawSizedWrapped(panel_font_style, x + pad, y, Z_MODAL, text_w, 0, 32, 32,
-                'You have not completed the level you were working on.  Starting' +
-                ' a new level will lose your progress. If you choose No, select' +
-                ' Back from the Menu to return to your game.\n' +
-                '\n' +
-                'Discard progress and start a new level?');
-              y += pad;
-
-              if (glov_ui.buttonText(x + pad, y, Z_MODAL, BUTTON_W / 2, BUTTON_H, 'Yes')) {
-                doStartLevel(ld);
-                modal_dialog = null;
-              }
-
-              if (glov_ui.buttonText(x + MODAL_W - BUTTON_W / 2 - pad, y, Z_MODAL, BUTTON_W / 2, BUTTON_H, 'No')) {
-                modal_dialog = null;
-              }
-              y+= BUTTON_H;
-
-              y += pad * 2;
-
-              drawPanel(x, y0, Z_MODAL - 1, MODAL_W, y - y0);
-            }).bind(null, ld);
-          } else {
-            doStartLevel(ld);
+        // eslint-disable-next-line no-loop-func, no-shadow
+        (function (ld) {
+          if (buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W, BUTTON_H, ld.name)) {
+            if (!COMPO_VERSION && !dd.goal_reached_persist && dd.history.length > 1) {
+              // already have something in progress, prompt first!
+              glov_ui.modalDialog({
+                title: '',
+                text: 'You have not completed the level you were working on.  Starting' +
+                  ' a new level will lose your progress. If you choose No, select' +
+                  ' Back from the Menu to return to your game.\n' +
+                  '\n' +
+                  'Discard progress and start a new level?',
+                buttons: {
+                  'Yes': () => doStartLevel(ld),
+                  'No': null,
+                }
+              });
+            } else {
+              doStartLevel(ld);
+            }
           }
-        }
+        }(ld));
 
         // Score
-        font.drawAlignedSized(panel_font_style, SCORE_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
+        font.drawSizedAligned(panel_font_style, SCORE_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE,
           glov_font.ALIGN.HFIT, SCORE_W - 16, 0,
           ld.local_score ? score.formatScore(ld.local_score) : 'incomplete');
         if (ld.local_score) {
@@ -2423,24 +2391,24 @@ TurbulenzEngine.onload = function onloadFn()
         high_score = high_score && high_score[0];
         if (high_score) {
           let mine = ld.local_score && high_score.score.turns === ld.local_score.turns && high_score.score.net_worth === ld.local_score.net_worth;
-          font.drawAlignedSized(mine ? font_style_hs_mine : font_style_hs_other,
-            SCORE_HIGH_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE, SCORE_SIZE,
+          font.drawSizedAligned(mine ? font_style_hs_mine : font_style_hs_other,
+            SCORE_HIGH_X, y + (BUTTON_H - SCORE_SIZE) / 2 - 4, Z_UI, SCORE_SIZE,
             glov_font.ALIGN.HFIT, SCORE_HIGH_W - 16, 0,
-            score.formatName(high_score) + ' ' + score.formatScore(high_score.score));
+            `${score.formatName(high_score)} ${score.formatScore(high_score.score)}`);
         }
 
         y += BUTTON_H - 8;
-        if (glov_ui.buttonText(SCORE_HIGH_X, y, Z_UI, SCORE_HIGH_W, BUTTON_H, 'View Scores')) {
+        if (buttonText(SCORE_HIGH_X, y, Z_UI, SCORE_HIGH_W, BUTTON_H, 'View Scores')) {
           viewScoresInit(ld.name);
         }
         y += BUTTON_H + 4;
       }
-      font.drawAlignedSized(panel_font_style, LEVEL_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSizedAligned(panel_font_style, LEVEL_X, y, Z_UI, SCORE_SIZE,
         glov_font.ALIGN.HCENTER, MENU_BUTTON_W, 0, 'Total Score');
-      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE, SCORE_SIZE,
+      font.drawSized(panel_font_style, SCORE_X, y, Z_UI, SCORE_SIZE,
         all_done ?
-        score.formatScore(score_total) :
-        'incomplete');
+          score.formatScore(score_total) :
+          'incomplete');
       y += SCORE_SIZE;
       y += 12;
 
@@ -2450,13 +2418,13 @@ TurbulenzEngine.onload = function onloadFn()
         play_state = 'build';
       }
 
-      if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Medium)')) {
+      if (buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Medium)')) {
         ld_rand_med.seed = Math.random();
         dd.startLevel(ld_rand_med);
         play_state = 'build';
       }
       y += BUTTON_H + 4;
-      if (glov_ui.buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Large)')) {
+      if (buttonText(LEVEL_X, y, Z_UI, MENU_BUTTON_W + 150, BUTTON_H, 'Random (Large)')) {
         ld_rand_large.seed = Math.random();
         dd.startLevel(ld_rand_large);
         play_state = 'build';
@@ -2465,26 +2433,26 @@ TurbulenzEngine.onload = function onloadFn()
 
 
       y += 16;
-      if (glov_ui.buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Recipes')) {
+      if (buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Recipes')) {
         play_state = 'recipes';
         recipes_page = 0;
       }
       y += BUTTON_H + 4;
 
       if (dd.map.length > 3) {
-        if (glov_ui.buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Back')) {
+        if (buttonText(x + 16, y, Z_UI, MENU_BUTTON_W, BUTTON_H, 'Back')) {
           play_state = 'build';
         }
         y += BUTTON_H;
       }
 
       if (!COMPO_VERSION) {
-        if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+        if (buttonImage(x + MENU_W - 16 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
           sprites.sound, sprites.sound.rects[sound_manager.music_on ? 0 : 2])) {
           sound_manager.music_on = !sound_manager.music_on;
         }
 
-        if (glov_ui.buttonImage(x + MENU_W - 16 - BUTTON_H - 4 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
+        if (buttonImage(x + MENU_W - 16 - BUTTON_H - 4 - BUTTON_H, y - BUTTON_H - 16, Z_UI, BUTTON_H, BUTTON_H,
           sprites.sound, sprites.sound.rects[sound_manager.sound_on ? 1 : 3])) {
           sound_manager.sound_on = !sound_manager.sound_on;
         }
@@ -2499,7 +2467,7 @@ TurbulenzEngine.onload = function onloadFn()
     }
     if (status) {
       const STATUS_H = 32;
-      font.drawSized(panel_font_style, (BUTTON_W  + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, STATUS_H, status);
+      font.drawSized(panel_font_style, (BUTTON_W + 4) * button_bottom_count + 40, UI_BOTTOM - STATUS_H - (BUTTON_H - STATUS_H) / 2, Z_UI, STATUS_H, status);
     }
 
     let tut_indicator = null;
@@ -2523,17 +2491,17 @@ TurbulenzEngine.onload = function onloadFn()
           let tut_x = glov_camera.x1() - tut_w;
           let tut_y0 = glov_camera.y1() - bar_h - tut_h;
           let tut_y = tut_y0 + tut_pad;
-          font.drawSized(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, font_size * 1.5, font_size * 1.5,
+          font.drawSized(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, font_size * 1.5,
             'Tutorial');
           tut_y += font_size * 1.5;
-          tut_y += font.drawSizedWrapped(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, text_w, tut_indent, font_size, font_size, tut_msg);
+          tut_y += font.drawSizedWrapped(panel_font_style, tut_x + tut_pad, tut_y, Z_TUT, text_w, tut_indent, font_size, tut_msg);
           drawPanel(tut_x, tut_y0, Z_TUT - 1, tut_w, tut_h);
         }
         if (tut_state.indicator_name) {
           // must be a UI indicator, draw now
           let indicator = indicator_pos[tut_state.indicator_name];
           if (indicator) {
-            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(glov_engine.getFrameTimestamp() * 0.005)), 10000, [1,1,1,0.75]);
           }
         }
         if (tut_state.indicator) {
@@ -2543,7 +2511,7 @@ TurbulenzEngine.onload = function onloadFn()
           };
           // In-word indicator, draw after camera change.
           tut_indicator = () => {
-            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(global_timer * 0.005)), 10000, [1,1,1,0.75]);
+            draw_list.queue(sprites.green_arrow, indicator.x - TILE_SIZE/2, indicator.y - TILE_SIZE - 30 * Math.abs(Math.sin(glov_engine.getFrameTimestamp() * 0.005)), 10000, [1,1,1,0.75]);
           };
         }
         if (tut_state.done && tut_state.done()) {
@@ -2560,7 +2528,7 @@ TurbulenzEngine.onload = function onloadFn()
 
     if (play_state === 'preview') {
       let pos;
-      if ((pos = glov_input.clickHit(-Infinity, -Infinity, Infinity, Infinity))) {
+      if ((pos = clickHit(-Infinity, -Infinity, Infinity, Infinity))) {
         floatTextUI(pos[0] - 80, pos[1] - 24, FLOATER_TIME_BUY, 'Cannot build during preview', font_style_buy);
       }
     }
@@ -2593,7 +2561,7 @@ TurbulenzEngine.onload = function onloadFn()
         if (play_state === 'build') {
           if (tile && (tile.type === 'base' || tile.type === 'resource')) {
             // not sellable
-            if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+            if (isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
 
               let lines = [];
               if (tile.type === 'base') {
@@ -2603,20 +2571,22 @@ TurbulenzEngine.onload = function onloadFn()
                   'to earn money.'
                 ];
               } else {
-                if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+                if (clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                   glov_ui.playUISound('button_click');
                   show_recipes = !show_recipes;
                 }
                 lines = [
-                  'Resource: ' + resource_types[tile.resource].type,
-                  'Quantity: ' + resource_types[tile.resource].quantity,
-                  'Value: $' + resource_types[tile.resource].value,
+                  `Resource: ${resource_types[tile.resource].type}`,
+                  `Quantity: ${resource_types[tile.resource].quantity}`,
+                  `Value: $${resource_types[tile.resource].value}`,
                 ];
                 if (show_recipes) {
                   lines.push('Recipes:');
+                  // eslint-disable-next-line no-shadow
                   for (let ii = 0; ii < recipes.length; ++ii) {
                     let r = recipes[ii];
                     let match = false;
+                    // eslint-disable-next-line no-shadow
                     for (let jj = 3; jj < r.length; ++jj) {
                       if (r[jj] === resource_types[tile.resource].type) {
                         match = true;
@@ -2624,11 +2594,12 @@ TurbulenzEngine.onload = function onloadFn()
                     }
                     let ingre = [];
                     if (match) {
+                      // eslint-disable-next-line no-shadow
                       for (let jj = 3; jj < r.length; ++jj) {
                         ingre.push(r[jj] || '?');
                       }
-                      lines.push(`  ${r[1]} (\$${resource_types[findResourceType(r[1])].value}) = `,
-                        '    ' + ingre.join(' + '));
+                      lines.push(`  ${r[1]} ($${resource_types[findResourceType(r[1])].value}) = `,
+                        `    ${ingre.join(' + ')}`);
                     }
                   }
                 } else {
@@ -2646,8 +2617,9 @@ TurbulenzEngine.onload = function onloadFn()
                 if (tx + TOOLTIP_W > glov_camera.x1()) {
                   tx = x - TOOLTIP_W;
                 }
+                // eslint-disable-next-line no-shadow
                 for (let ii = 0; ii < lines.length; ++ii) {
-                  font.drawSized(panel_font_style, tx + 16, ty, Z_UI + 3, TOOLTIP_FONT_SIZE, TOOLTIP_FONT_SIZE, lines[ii]);
+                  font.drawSized(panel_font_style, tx + 16, ty, Z_UI + 3, TOOLTIP_FONT_SIZE, lines[ii]);
                   ty += TOOLTIP_FONT_SIZE;
                 }
                 ty += 8;
@@ -2657,10 +2629,10 @@ TurbulenzEngine.onload = function onloadFn()
           } else {
             if (tile) {
               let do_sell = false;
-              if (eff_current_tile === 'sell' && glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (eff_current_tile === 'sell' && clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 do_sell = true;
               }
-              if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size, 1)) {
+              if (clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size, 1)) {
                 do_sell = true;
               }
               if (do_sell) {
@@ -2673,7 +2645,7 @@ TurbulenzEngine.onload = function onloadFn()
               }
             }
             if (eff_current_tile === 'sell') {
-              if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 if (!tile) {
                   drawTile('sell', 0, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
                 } else {
@@ -2684,14 +2656,14 @@ TurbulenzEngine.onload = function onloadFn()
           }
           if (eff_current_tile !== 'sell') {
             if (dd.canPlaceTile(ii, jj, current_tile) || tile && tile.type === current_tile) {
-              if (glov_input.clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              if (clickHit(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 dd.buyTile(ii, jj, current_tile, current_direction);
                 if (tile && tile.type === current_tile) {
                   current_direction = tile.direction;
                 }
                 do_draw = false;
                 drawTile(current_tile, current_direction, ii, jj, Z_BUILD_TILE, [1, 1, 1, 0.5]);
-              } else if (glov_input.isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
+              } else if (isMouseOver(x, y, TILE_SIZE * tile_size, TILE_SIZE * tile_size)) {
                 let dir = current_direction;
                 if (tile && tile.type === current_tile) {
                   do_draw = false;
@@ -2785,7 +2757,8 @@ TurbulenzEngine.onload = function onloadFn()
       let lasty = actor.lasty;
       let nextx = actor.x;
       let nexty = actor.y;
-      let x, y;
+      let x;
+      let y;
       let direction = actor.direction;
       if (progress < 0.75) {
         direction = actor.last_direction;
@@ -2813,6 +2786,7 @@ TurbulenzEngine.onload = function onloadFn()
       if (actor.carrying) {
         // do resources transfered to us
         let rt = null;
+        // eslint-disable-next-line no-shadow
         for (let ii = 0; ii < dd.resource_transfers.length; ++ii) {
           let rtt = dd.resource_transfers[ii];
           // Look for a resource transfered to us
@@ -2830,6 +2804,7 @@ TurbulenzEngine.onload = function onloadFn()
       }
       // do resources transfered from us
       let rt = null;
+      // eslint-disable-next-line no-shadow
       for (let ii = 0; ii < dd.resource_transfers.length; ++ii) {
         let rtt = dd.resource_transfers[ii];
         // Look for a resource transfered from us
@@ -2887,181 +2862,7 @@ TurbulenzEngine.onload = function onloadFn()
       draw_list.queue(sprites.white, game_width, 0, 1.75, [1, 0, 0, 0.5],
         [extra, game_height, 1, 1]);
     }
-
   }
 
-  function test(dt) {
-    const spriteSize = 64;
-    if (!test.color_sprite) {
-      test.color_sprite = color_white;
-      test.sprite = createSprite('test.png', {
-        width : spriteSize,
-        height : spriteSize,
-        rotation : 0,
-        color : test.color_sprite,
-        textureRectangle : math_device.v4Build(0, 0, spriteSize, spriteSize)
-      });
-      test.character = {
-        x : (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5)),
-        y : (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5)),
-      };
-      test.game_bg = createSprite('white', {
-        width : game_width,
-        height : game_height,
-        x : 0,
-        y : 0,
-        rotation : 0,
-        color : [0, 0.72, 1, 1],
-        origin: [0, 0],
-        textureRectangle : math_device.v4Build(0, 0, spriteSize, spriteSize)
-      });
-    }
-
-    // test.character.x = (Math.random() * (game_width - spriteSize) + (spriteSize * 0.5));
-    // test.character.y = (Math.random() * (game_height - spriteSize) + (spriteSize * 0.5));
-
-    test.character.dx = 0;
-    test.character.dy = 0;
-    if (glov_input.isKeyDown(key_codes.LEFT) || glov_input.isKeyDown(key_codes.A) || glov_input.isPadButtonDown(0, pad_codes.LEFT)) {
-      test.character.dx = -1;
-    } else if (glov_input.isKeyDown(key_codes.RIGHT) || glov_input.isKeyDown(key_codes.D) || glov_input.isPadButtonDown(0, pad_codes.RIGHT)) {
-      test.character.dx = 1;
-    }
-    if (glov_input.isKeyDown(key_codes.UP) || glov_input.isKeyDown(key_codes.W) || glov_input.isPadButtonDown(0, pad_codes.UP)) {
-      test.character.dy = -1;
-    } else if (glov_input.isKeyDown(key_codes.DOWN) || glov_input.isKeyDown(key_codes.S) || glov_input.isPadButtonDown(0, pad_codes.DOWN)) {
-      test.character.dy = 1;
-    }
-
-    test.character.x += test.character.dx * dt * 0.2;
-    test.character.y += test.character.dy * dt * 0.2;
-    if (glov_input.isMouseDown() && glov_input.isMouseOver(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
-      test.sprite.setColor(color_yellow);
-    } else if (glov_input.clickHit(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
-      test.color_sprite = (test.color_sprite === color_red) ? color_white : color_red;
-      sound_manager.play('test');
-    } else if (glov_input.isMouseOver(test.character.x - spriteSize/2, test.character.y - spriteSize/2, spriteSize, spriteSize)) {
-      test.color_sprite[3] = 0.5;
-    } else {
-      test.color_sprite[3] = 1;
-    }
-
-    draw_list.queue(test.game_bg, 0, 0, 1, [0, 0.72, 1, 1]);
-    draw_list.queue(test.sprite, test.character.x, test.character.y, 2, test.color_sprite);
-
-    let font_test_idx = 0;
-    let font_style = null;
-
-    font.drawSized(glov_font.styleColored(null, 0x000000ff), test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'TEST!');
-    font_style = glov_font.style(null, {
-      color: 0xFF00FFff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'TEST2!');
-    font_style = glov_font.style(null, {
-      outline_width: 2.0,
-      outline_color: 0x800080ff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'OUTLINE');
-    font_style = glov_font.style(null, {
-      outline_width: 2.0,
-      outline_color: 0xFFFF00ff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'OUTLINE2');
-    font_style = glov_font.style(null, {
-      glow_xoffs: 3.25,
-      glow_yoffs: 3.25,
-      glow_inner: -2.5,
-      glow_outer: 5,
-      glow_color: 0x000000ff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'Drop Shadow');
-    font_style = glov_font.style(null, {
-      glow_xoffs: 0,
-      glow_yoffs: 0,
-      glow_inner: -1,
-      glow_outer: 5,
-      glow_color: 0xFFFFFFff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'Glow');
-    font_style = glov_font.style(null, {
-      outline_width: 1.0,
-      outline_color: 0x800000ff,
-      glow_xoffs: 3.25,
-      glow_yoffs: 3.25,
-      glow_inner: -2.5,
-      glow_outer: 5,
-      glow_color: 0x000000ff,
-    });
-    font.drawSized(font_style, test.character.x, test.character.y + (++font_test_idx * 20), 3, 24, 24,
-      'Both');
-  }
-
-  game_state = loadingInit;
-
-  var last_tick = Date.now();
-  function tick() {
-    if (!graphics_device.beginFrame()) {
-      return;
-    }
-    var now = Date.now();
-    var dt = Math.min(Math.max(now - last_tick, 1), 250);
-    last_tick = now;
-    global_timer += dt;
-
-    glov_camera.tick();
-    glov_camera.set2DAspectFixed(game_width, game_height);
-    sound_manager.tick(dt);
-    glov_input.tick();
-    glov_ui.tick();
-
-    if (window.need_repos) {
-      --window.need_repos;
-      var ul = [];
-      glov_camera.virtualToPhysical(ul, [0,0]);
-      var lr = [];
-      glov_camera.virtualToPhysical(lr, [game_width-1,game_height-1]);
-      var viewport = [ul[0], ul[1], lr[0], lr[1]];
-      var height = viewport[3] - viewport[1];
-      // default font size of 16 when at height of game_height
-      var font_size = Math.min(256, Math.max(2, Math.floor(height/800 * 16)));
-      $('#gamescreen').css({
-        left: viewport[0],
-        top: viewport[1],
-        width: viewport[2] - viewport[0],
-        height: height,
-        'font-size': font_size,
-      });
-      $('#fullscreen').css({
-        'font-size': font_size,
-      });
-    }
-
-    draw_2d.setBackBuffer();
-    draw_2d.clear([0, 0, 0, 1]);
-
-    if (modal_dialog) {
-      modal_dialog();
-      let darken_color = [0, 0, 0, 0.75];
-      draw_list.queue(sprites.white, glov_camera.x0(), glov_camera.y0(), Z_MODAL - 2, darken_color,
-        [glov_camera.x1() - glov_camera.x0(), glov_camera.y1() - glov_camera.y0(), 1, 1]);
-
-      glov_input.eatAllInput();
-    }
-
-    game_state(dt);
-
-    draw_list.draw();
-
-    graphics_device.endFrame();
-    glov_input.endFrame();
-  }
-
-  loadingInit();
-  TurbulenzEngine.setInterval(tick, 1000/60);
-};
+  initGraphics();
+}

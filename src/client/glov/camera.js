@@ -1,15 +1,15 @@
-/*global math_device: false */
-/*global Draw2D: false */
+/*global VMath: false */
 
 class GlovCamera {
   constructor(graphics_device, draw_2d) {
     this.graphics_device = graphics_device;
     this.draw_2d = draw_2d;
     this.params = {
-      scaleMode : 'scale',
-      viewportRectangle : math_device.v4Build(0, 0, 100, 100)
+      scaleMode: 'scale',
+      viewportRectangle: VMath.v4Build(0, 0, 100, 100)
     };
-    this.data = new Draw2D.floatArray(6); // x0, y0, x1, y1, x_scale, y_scale
+    this.data = new VMath.F32Array(7); // x0, y0, x1, y1, x_scale, y_scale, css_to_real
+    this.data[6] = window.devicePixelRatio || 1; /* css_to_real */
     this.set2D(0, 0, graphics_device.width, graphics_device.height);
     this.tick();
   }
@@ -24,6 +24,10 @@ class GlovCamera {
     this.reapply();
   }
 
+  set2DNormalized() {
+    this.set2D(0, 0, 1, 1);
+  }
+
   x0() {
     return this.data[0];
   }
@@ -35,6 +39,12 @@ class GlovCamera {
   }
   y1() {
     return this.data[3];
+  }
+  w() {
+    return this.data[2] - this.data[0];
+  }
+  h() {
+    return this.data[3] - this.data[1];
   }
   xScale() {
     return this.data[4];
@@ -49,13 +59,13 @@ class GlovCamera {
   }
 
   physicalToVirtual(dst, src) {
-    dst[0] = src[0] / this.data[4] + this.data[0];
-    dst[1] = src[1] / this.data[5] + this.data[1];
+    dst[0] = src[0] * this.data[6] / this.data[4] + this.data[0];
+    dst[1] = src[1] * this.data[6] / this.data[5] + this.data[1];
   }
 
   virtualToPhysical(dst, src) {
-    dst[0] = (src[0] - this.data[0]) * this.data[4];
-    dst[1] = (src[1] - this.data[1]) * this.data[5];
+    dst[0] = (src[0] - this.data[0]) * this.data[4] / this.data[6];
+    dst[1] = (src[1] - this.data[1]) * this.data[5] / this.data[6];
   }
 
   // Drawing area 0,0-w,h
@@ -63,7 +73,7 @@ class GlovCamera {
   // This may create a padding or margin on either bottom or sides of the screen
   set2DAspectFixed(w, h) {
     let inv_aspect = h / w;
-    let inv_desired_aspect = (this.screen_height / this.screen_width);
+    let inv_desired_aspect = this.screen_height / this.screen_width;
     if (inv_aspect > inv_desired_aspect) {
       let margin = (h / inv_desired_aspect - w) / 2;
       this.set2D(-margin, 0, w + margin, h);
@@ -72,6 +82,16 @@ class GlovCamera {
       this.set2D(0, -margin, w, h + margin);
     }
   }
+
+  zoom(x, y, factor) {
+    let inv_factor = 1.0 / factor;
+    this.set2D(
+      x - (x - this.x0()) * inv_factor,
+      y - (y - this.y0()) * inv_factor,
+      x + (this.x1() - x) * inv_factor,
+      y + (this.y1() - y) * inv_factor);
+  }
+
 
   tick() {
     let graphics_device = this.graphics_device;
@@ -99,8 +119,6 @@ class GlovCamera {
   }
 }
 
-export function create() {
-  let args = Array.prototype.slice.call(arguments, 0);
-  args.splice(0,0, null);
-  return new (Function.prototype.bind.apply(GlovCamera, args))();
+export function create(...args) {
+  return new GlovCamera(...args);
 }
