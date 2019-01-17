@@ -61,16 +61,16 @@ export function main(canvas) {
   //sound_manager.use_oggs = true;
   //sound_manager.music_on = false;
   if (!COMPO_VERSION) {
-    sound_manager.loadSound('music1');
-    sound_manager.loadSound('music2');
-    sound_manager.loadSound('sell');
-    sound_manager.loadSound('place_good');
-    sound_manager.loadSound('place_error');
-    sound_manager.loadSound('place_rotate');
-    sound_manager.loadSound('tick_sell');
-    sound_manager.loadSound('tick_pickup');
-    sound_manager.loadSound('tick_dropoff');
-    sound_manager.loadSound('tick_craft');
+    sound_manager.loadSound('drone/music1');
+    sound_manager.loadSound('drone/music2');
+    sound_manager.loadSound('drone/sell');
+    sound_manager.loadSound('drone/place_good');
+    sound_manager.loadSound('drone/place_error');
+    sound_manager.loadSound('drone/place_rotate');
+    sound_manager.loadSound('drone/tick_sell');
+    sound_manager.loadSound('drone/tick_pickup');
+    sound_manager.loadSound('drone/tick_dropoff');
+    sound_manager.loadSound('drone/tick_craft');
   }
   const MUSIC_VOLUME = DEBUG ? 0 : 0.2;
 
@@ -88,13 +88,13 @@ export function main(canvas) {
   }
 
   // Preload
-  loadTexture('arrow.png');
-  loadTexture('background.png');
-  loadTexture('base.png');
-  loadTexture('drone.png');
-  loadTexture('resource.png');
-  loadTexture('sell.png');
-  loadTexture('upgrade_power.png');
+  loadTexture('drone/arrow.png');
+  loadTexture('drone/background.png');
+  loadTexture('drone/base.png');
+  loadTexture('drone/drone.png');
+  loadTexture('drone/resource.png');
+  loadTexture('drone/sell.png');
+  loadTexture('drone/upgrade_power.png');
 
   // Virtual viewport for our game logic
   glov_camera.set2DAspectFixed(game_width, game_height);
@@ -455,18 +455,18 @@ export function main(canvas) {
       }
       return glov_sprite.buildRects(ws, hs).rects;
     }
-    sprites.background = createSpriteSimple('background.png', spriteSize * 4 * background_tile, spriteSize * 4 * background_tile, {
+    sprites.background = createSpriteSimple('drone/background.png', spriteSize * 4 * background_tile, spriteSize * 4 * background_tile, {
       width: TILE_SIZE * 4 * background_tile,
       height: TILE_SIZE * 4 * background_tile,
       origin: [0,0],
     });
-    sprites.tutorial1 = createSpriteSimple('tutorial1.png', 128, 128, {
+    sprites.tutorial1 = createSpriteSimple('drone/tutorial1.png', 128, 128, {
       width: TILE_SIZE * 4,
       height: TILE_SIZE * 4,
       origin: [0,0],
     });
     function loadSprite(name, tx, ty, sx, sy) {
-      sprites[name] = createSpriteSimple(`${name}.png`, spriteSize * (sx || 1), spriteSize * (sy || 1), {
+      sprites[name] = createSpriteSimple(`drone/${name}.png`, spriteSize * (sx || 1), spriteSize * (sy || 1), {
         width: TILE_SIZE * (sx || 1),
         height: TILE_SIZE * (sy || 1),
         origin: [0,0],
@@ -484,7 +484,7 @@ export function main(canvas) {
     loadSprite('craft3', 2, 2, 3, 3);
     loadSprite('sound', 2, 5);
 
-    sprites.panel = createSpriteSimple('panel.png', [2, 12, 2], [2, 12, 2], origin_0_0);
+    sprites.panel = createSpriteSimple('drone/panel.png', [2, 12, 2], [2, 12, 2], origin_0_0);
   }
 
   const base_slurp_coords = [
@@ -996,7 +996,7 @@ export function main(canvas) {
         this.history_pos--;
         this.fromJSON(JSON.parse(this.history[this.history_pos]));
       } else {
-        sound_manager.play('place_error');
+        sound_manager.play('drone/place_error');
       }
     }
 
@@ -1008,12 +1008,12 @@ export function main(canvas) {
     }
     redo() {
       if (this.history_pos === null) {
-        sound_manager.play('place_error');
+        sound_manager.play('drone/place_error');
         return;
       }
       if (this.history_pos >= this.history.length - 1) {
         this.history_pos = null;
-        sound_manager.play('place_error');
+        sound_manager.play('drone/place_error');
         return;
       }
       this.history_pos++;
@@ -1122,7 +1122,7 @@ export function main(canvas) {
         !tutorial_states[this.tutorial_state].buy_validate ||
         !tutorial_states[this.tutorial_state].buy_validate(x, y, tile_type, dir)
       )) {
-        sound_manager.play('place_error');
+        sound_manager.play('drone/place_error');
         floatText(x, y, 2000, 'Invalid (please follow directions)', font_style_buy);
         return;
       }
@@ -1143,22 +1143,22 @@ export function main(canvas) {
             }
           }
           dmoney = this.costOf(old_type, 1);
-          sound_manager.play('sell');
+          sound_manager.play('drone/sell');
         }
       } else {
         if (tile && tile.type === tile_type) {
           // just rotate
           tile.direction = (tile.direction + 1) % 4;
-          sound_manager.play('place_rotate');
+          sound_manager.play('drone/place_rotate');
         } else {
           dmoney = -this.costOf(tile_type, 1);
           if (-dmoney > this.money) {
-            sound_manager.play('place_error');
+            sound_manager.play('drone/place_error');
             floatText(x, y, FLOATER_TIME_BUY, `Cannot afford $${-dmoney}`, font_style_buy);
             dmoney = 0;
           } else {
             // place new tile(s)
-            sound_manager.play('place_good');
+            sound_manager.play('drone/place_good');
             let size = tile_type_size[tile_type] || 1;
             for (let ii = 0; ii < size; ++ii) {
               for (let jj = 0; jj < size; ++jj) {
@@ -1185,12 +1185,12 @@ export function main(canvas) {
         return;
       }
       this.tick_sounds[name] = true;
-      sound_manager.play(`tick_${name}`);
+      sound_manager.play(`drone/tick_${name}`);
     }
 
     resetActors() {
       if (!COMPO_VERSION) {
-        sound_manager.playMusic('music1', MUSIC_VOLUME, sound_manager.FADE);
+        sound_manager.playMusic('drone/music1', MUSIC_VOLUME, sound_manager.FADE);
       }
       this.goal_reached = false;
       this.resource_transfers = [];
@@ -1661,7 +1661,7 @@ export function main(canvas) {
 
   function previewStart() {
     if (!COMPO_VERSION) {
-      sound_manager.playMusic('music2', MUSIC_VOLUME, sound_manager.FADE_OUT);
+      sound_manager.playMusic('drone/music2', MUSIC_VOLUME, sound_manager.FADE_OUT);
     }
     play_state = 'preview';
     tick_time = ADVANCE_SPEED;
