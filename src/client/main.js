@@ -8,6 +8,7 @@ const COMPO_VERSION = false;
 const assert = require('assert');
 const glov_engine = require('./glov/engine.js');
 const glov_font = require('./glov/font.js');
+const { easeIn, easeOut, easeInOut } = require('../common/util.js');
 
 const Z_TILES = 10;
 const Z_BUILD_TILE = 30;
@@ -134,7 +135,7 @@ export function main(canvas) {
     return glov_ui.buttonText({ x, y, z, text, w, h, font_height: h * 0.7 });
   }
   function buttonImage(x, y, z, w, h, img, img_rect) {
-    return glov_ui.buttonImage({ x, y, z, w, h, img, img_rect });
+    return glov_ui.buttonImage({ x, y, z, w, h, img, img_rect, bucket: 'alpha_nearest' });
   }
   function clickHit(x, y, w, h, button) {
     return glov_input.clickHit({ x, y, w, h, button });
@@ -1655,20 +1656,8 @@ export function main(canvas) {
     if (s.rects) {
       tex_rect = s.rects[direction];
     }
-    draw_list.queue(s, x * TILE_SIZE, y * TILE_SIZE, z, color, null, tex_rect);
+    draw_list.queue(s, x * TILE_SIZE, y * TILE_SIZE, z, color, null, tex_rect, 0, 'alpha_nearest');
   }
-
-  function easeInOut(v, a) {
-    let va = Math.pow(v, a);
-    return va / (va + Math.pow(1 - v, a));
-  }
-  function easeIn(v, a) {
-    return 2 * easeInOut(0.5 * v, a);
-  }
-  function easeOut(v, a) {
-    return 2 * easeInOut(0.5 + 0.5 * v, a) - 1;
-  }
-
 
   function previewStart() {
     if (!COMPO_VERSION) {
@@ -1765,7 +1754,7 @@ export function main(canvas) {
   function drawResource(x, y, tile, z) {
     let s = sprites.resource;
     let tex_rect = s.rects[tile];
-    draw_list.queue(s, x, y, z || Z_UI, color_white, null, tex_rect);
+    draw_list.queue(s, x, y, z || Z_UI, color_white, null, tex_rect, 0, 'alpha_nearest');
   }
 
   const PANEL_W = 200;
@@ -2174,7 +2163,7 @@ export function main(canvas) {
           'Drone Power');
         y += font_size + pad;
 
-        draw_list.queue(sprites[ugt], x, y, Z_UI, color_white);
+        draw_list.queue(sprites[ugt], x, y, Z_UI, color_white, null, null, 0, 'alpha_nearest');
 
         /* jshint bitwise:false*/
         font.drawSizedAligned(panel_font_style, x, y, Z_UI + 1, font_size,
